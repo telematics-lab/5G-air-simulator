@@ -1,0 +1,44 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Dependency files
+*.d
+
+# Backup files
+*~
+.DS_Store
+._*
+
+*.xcodeproj
+
+# Project executables
+5G-air-simulator
+
+#Fast Fading Traces
+src/channel/propagation-model/FastFadingRealization/*

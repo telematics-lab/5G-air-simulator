@@ -1,0 +1,26 @@
+   5G-air-simulator RELEASE NOTES
+====================================
+
+This file contains 5G-air-simulator release notes
+(ordered from the most recent one).
+
+Release 20.02
+=============
+
+Features
+--------
+First release of 5G-air-simulator
+
+
+Availability
+------------
+This release is available from this git repository
+https://github.com/telematics-lab/5G-air-simulator
+
+
+Supported platforms
+-------------------
+- Linux Ubuntu 18.04 with g++ 7.4.0, GNU Make 4.1, ARMA 8.400.0
+- Apple macOs Catalina 10.15.3 with Xcode 11.3.1 (clang 11.0.0), GNU Make 3.81, ARMA 9.800.1
+
+
