@@ -98,8 +98,9 @@ DEBUG_LOG_END
   double shift_x =
     shift * cos (GetSpeedDirection());
 
+  //TODO: CHECK GD Why " + shift_x " removed?
   CartesianCoordinates *newPosition =
-    new CartesianCoordinates(GetAbsolutePosition()->GetCoordinateX()+shift_x,
+    new CartesianCoordinates(GetAbsolutePosition()->GetCoordinateX(),//+shift_x,
                              GetAbsolutePosition()->GetCoordinateY()+shift_y,
                              GetAbsolutePosition()->GetCoordinateZ());
   newPosition->SetFloorHeight( GetAbsolutePosition()->GetFloorHeight() );

@@ -41,6 +41,8 @@
 #include <assert.h>
 #include <complex>
 #include <string.h>
+#include "propagation-loss-model.h"
+#include <fstream>
 
 
 ChannelRealization::ChannelRealization (NetworkNode* src, NetworkNode* dst, ChannelModel model, bool MBSFNRealization)
@@ -450,295 +452,307 @@ ChannelRealization::GetSamplingPeriod (void)
 double
 ChannelRealization::GetPathLoss (void)
 {
-  ShortTermUpdate();
-  NetworkNode* src = GetSourceNode ();
-  NetworkNode* dst = GetDestinationNode ();
-
-  UserEquipment* ue;
-  GNodeB* gnb;
-
-  if (src->GetNodeType () == NetworkNode::TYPE_UE
+    //TODO: CHECK GD why? BE CAREFUL!
+    //ShortTermUpdate();
+    NetworkNode* src = GetSourceNode ();
+    NetworkNode* dst = GetDestinationNode ();
+    
+    UserEquipment* ue;
+    GNodeB* gnb;
+    
+    if (src->GetNodeType () == NetworkNode::TYPE_UE
         && ( dst->GetNodeType () == NetworkNode::TYPE_GNODEB
-              || dst->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION) )
+            || dst->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION) )
     {
-      ue = (UserEquipment*) src;
-      gnb = (GNodeB*) dst;
+        ue = (UserEquipment*) src;
+        gnb = (GNodeB*) dst;
     }
-  else if (dst->GetNodeType () == NetworkNode::TYPE_UE
-            && ( src->GetNodeType () == NetworkNode::TYPE_GNODEB
-                  || src->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION) )
+    else if (dst->GetNodeType () == NetworkNode::TYPE_UE
+             && ( src->GetNodeType () == NetworkNode::TYPE_GNODEB
+                 || src->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION) )
     {
-      ue = (UserEquipment*) dst;
-      gnb = (GNodeB*) src;
+        ue = (UserEquipment*) dst;
+        gnb = (GNodeB*) src;
     }
-  CartesianCoordinates* uePos = ue->GetMobilityModel()->GetAbsolutePosition();
-  CartesianCoordinates* gnbPos = gnb->GetMobilityModel()->GetWrapAroundPosition(uePos);
-  double distance = uePos->GetDistance (gnbPos);
-  double distance3D = uePos->GetDistance3D (gnbPos);
-
-  double Henb = gnbPos->GetCoordinateZ ();
-  double Hb = gnb->GetPhy ()->GetAverageBuildingHeight ();
-  double Hue = uePos->GetCoordinateZ ();
-  double f = src->GetPhy ()->GetCarrierFrequency ();
-
-  // used in CHANNEL_MODEL_MACROCELL_URBAN and CHANNEL_MODEL_WINNER_DOWNLINK
-  double ExternalWallsAttenuation;
-  // used in CHANNEL_MODEL_FEMTOCELL_URBAN
-  double floorPenetration;
-  double minimumCouplingLoss;
-  // used in CHANNEL_MODEL_WINNER_DOWNLINK
-  double InternalWallsAttenuation;
-  // used in CHANNEL_MODEL_URBAN_IMT and CHANNEL_MODEL_RURAL_IMT
-  double losProbability;
-  double dbp, dbp1;
-  double randomProb;
-  //srand(time(nullptr));
-  double A, B, C;
-  int* nbWalls;
-
-  switch(m_channelModel)
+       
+    if(ue->IsTwin())
     {
-      case CHANNEL_MODEL_MACROCELL_URBAN:
-        /*
-         * According to 3GPP TR 36.942
-         * the Path Loss Model For Urban Environment is
-         * L =  80dB + 40 ⋅ (1 − 4 ⋅ 10 − 3 ⋅ Dhb) ⋅ log 10 (R) − 18 ⋅ log 10 (Dhb) + 21 ⋅ log 10 (f)
-         * R, in kilometers, is the distance between two nodes
-         * Dhb, in meters, is the height of the base station above rooftop level
-         * f, in MHz, is the carrier frequency
-         */
-        m_pathLoss = 80 + 40*( 1 - 4 * 0.001 * (Henb-Hb) )*log10(distance * 0.001) - 18*log10(Henb-Hb) + 21*log10(f);
-        if ( ue->IsIndoor() )
-          {
-            ExternalWallsAttenuation = 20; //[dB]
-            m_pathLoss = m_pathLoss + ExternalWallsAttenuation;
-          }
-        break;
-
-      case CHANNEL_MODEL_3GPP_CASE1:
-      case CHANNEL_MODEL_MACROCELL_SUB_URBAN :
-        /*
-         * According to  ---  insert standard 3gpp ---
-         * the Path Loss Model For Urban Environment is
-         * L = I + 37.6log10(R)
-         * R, in kilometers, is the distance between two nodes
-         * I = 128.1 at 2GHz
-         */
-        m_pathLoss = 128.1 + (37.6 * log10 (distance * 0.001));
-        break;
-
-
-      case CHANNEL_MODEL_MACROCELL_RURAL:
-        /*
-         * According to  ---  insert standard 3gpp ---
-         * the Path Loss Model For Rural Environment is
-         * L (R)= 69.55 +26.16log 10 (f)–13.82log 10 (Hb)+[44.9-6.55log 10 (Hb)]log(R) – 4.78(Log 10 (f)) 2 +18.33 log 10 (f) -40.94
-         * R, in kilometers, is the distance between two nodes
-         * f, in MHz, is the carrier frequency
-         * Hb, in meters, is the base station antenna height above ground
-         */
-        m_pathLoss = 69.55 + 26.16*log10(f) - 13.82*log10(Henb) + (44.9-6.55*log10(Henb))*log10(distance * 0.001) - 4.78*pow(log10(f),2) + 18.33*log10(f) - 40.94;
-        break;
-
-
-      case CHANNEL_MODEL_MICROCELL:
-        /*
-         * According to  ---  insert standard 3gpp ---
-         * the Path Loss Model For Rural Environment is
-         * L = 24 + 345log10(R)   * R, in meters, is the distance between two nodes
-         */
-        m_pathLoss = 24 + (45 * log10 (distance));
-        break;
-
-
-      case CHANNEL_MODEL_FEMTOCELL_URBAN:
-        /*
-         * Path loss Models from sect. 5.2 in
-         * 3GPP TSG RAN WG4 R4-092042
-         *
-         * Alternative simplified model based on LTE-A evaluation methodology which avoids modeling any walls.
-         */
-
-        minimumCouplingLoss = 45; //[dB] - see 3GPP TSG RAN WG4 #42bis (R4-070456)
-        floorPenetration = 0.0;
-        //18.3 n ((n+2)/(n+1)-0.46)
-
-        if( gnb->GetCell()->GetCellCenterPosition()->GetFloor() > 0
-            && ue->IsIndoor()
-            && gnb->GetCell()->GetCellCenterPosition()->GetFloor() != ue->GetCell()->GetCellCenterPosition()->GetFloor())
-          {
-            int n = (int) abs( gnb->GetCell()->GetCellCenterPosition()->GetFloor() - ue->GetCell()->GetCellCenterPosition()->GetFloor() );
-            floorPenetration = 18.3 * pow( n, ((n+2)/(n+1)-0.46));
-          }
-        m_pathLoss = max( minimumCouplingLoss, 127 + ( 30 * log10 (distance * 0.001) ) + floorPenetration);
-        break;
-
-
-      case CHANNEL_MODEL_3GPP_DOWNLINK:
-        /*
-         * Path Loss Model For Indoor Environment.
-         * L = 37 + 30 Log10(R) , R in meters
-         * at the same floor
-         */
-        m_pathLoss = 37 + (30 * log10 (distance));
-        break;
-
-
-      case CHANNEL_MODEL_WINNER_DOWNLINK:
-        /*
-         * Path Loss Model For Indoor Environment.
-         * "WINNER II channel models, ver 1.1, Tech Report"
-         * PL = A*log10(r) + B + C*log10(fc/5) + X; [r in meters; fc in GHz]
-         * I = 128.1 – 2GHz
-         * X depends on the number of walls in between
-         * FL = 17 + 4 (Nfloors - 1) --- floor loss
-         */
-        assert (dst->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION  || src->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION);
-
-        nbWalls = GetWalls( (Femtocell*) (gnb->GetCell()), ue);
-
-        ExternalWallsAttenuation = 20.0;
-        InternalWallsAttenuation = 10.0;
-
-        if (nbWalls[0] == 0 && nbWalls[1] == 0)
-          { //LOS
-            A = 18.7;
-            B = 46.8;
-            C = 20.0;
-          }
-        else
-          { //NLOS
-            A = 20.0;
-            B = 46.4;
-            C = 20.0;
-          }
-
-        m_pathLoss = A * log10( distance ) +
-                             B +
-                             C * log10(2. / 5.0) +
-                             InternalWallsAttenuation * nbWalls[1] +
-                             ExternalWallsAttenuation * nbWalls[0];
-
-        delete [] nbWalls;
-        break;
-
-
-      case CHANNEL_MODEL_MACROCELL_URBAN_IMT:
-        dbp1 = 4*(Henb-1)*(Hue-1)*(f/300); // 4*(h'BS)*(h'UT)*(f/c)
-        if(m_isLosType)
-          {
-            if(distance < dbp1)
-              {
-                m_pathLoss = 22.0*log10(distance) + 28 + 20*log10(f*0.001);
-              }
-            else
-              {
-                m_pathLoss = 40*log10(distance) + 7.8 - 18*log10(Henb-1)-18*log10(Hue-1)+2*log10(f*0.001);
-              }
-          }
-        else
-          {
-            m_pathLoss = 161.04 - 7.1*log10(20) + 7.5*log10(Hb) - (24.37 - 3.7*pow(Hb/Henb, 2)) * log10(Henb) + (43.42 - 3.1*log10(Henb)) * (log10(distance) - 3) + 20*log10(f * 0.001) - (3.2 * pow(log10(11.75*Hue), 2) - 4.97);
-          }
-        break;
-
-
-      case CHANNEL_MODEL_MACROCELL_URBAN_IMT_3D:
-        dbp1 = 4*(Henb-1)*(Hue-1)*(f/300); // 4*(h'BS)*(h'UT)*(f/c)
-
-        if(m_isLosType)
-          {
-            if(distance < dbp1)
-              {
-                m_pathLoss = 22.0*log10(distance3D) + 28 + 20*log10(f*0.001);
-              }
-            else
-              {
-                m_pathLoss = 40*log10(distance3D) + 28 + 20*log10(f*0.001) - 9*log10(pow(dbp1,2)+pow(Henb-Hue,2));
-              }
-          }
-        else
-          {
-            double W = 20; // street width in meters
-            m_pathLoss = 161.04 - 7.1*log10(W) + 7.5*log10(Hb) - (24.37 - 3.7*pow(Hb/Henb, 2)) * log10(Henb) + (43.42 - 3.1*log10(Henb)) * (log10(distance3D) - 3) + 20*log10(f * 0.001) - (3.2 * pow(log10(17.625), 2) - 4.97) - 0.6*(Hue-1.5);
-          }
-
-        if(ue->IsIndoor())
-          {
-            m_pathLoss += 0.5 * m_indoorDistance;
-          }
-        break;
-
-
-      case CHANNEL_MODEL_MACROCELL_RURAL_IMT:
-      dbp = 2*M_PI * Henb * 1.5 * (f/300); // 2pi * hBS * hUT * (f/c)
-      if(m_isLosType)
+        UserEquipment* original = NetworkManager::Init()->GetTwinUserEquipmentByID(ue->GetIDNetworkNode());
+        m_pathLoss = NetworkManager::Init()->GetPathLossForTwinFromUE(gnb,original);
+        return m_pathLoss;
+    }
+    else
+    {
+        
+        CartesianCoordinates* uePos = ue->GetMobilityModel()->GetAbsolutePosition();
+        CartesianCoordinates* gnbPos = gnb->GetMobilityModel()->GetWrapAroundPosition(uePos);
+        double distance = uePos->GetDistance (gnbPos);
+        double distance3D = uePos->GetDistance3D (gnbPos);
+        
+        double Henb = gnbPos->GetCoordinateZ ();
+        double Hb = gnb->GetPhy ()->GetAverageBuildingHeight ();
+        double Hue = uePos->GetCoordinateZ ();
+        double f = src->GetPhy ()->GetCarrierFrequency ();
+        
+        // used in CHANNEL_MODEL_MACROCELL_URBAN and CHANNEL_MODEL_WINNER_DOWNLINK
+        double ExternalWallsAttenuation;
+        // used in CHANNEL_MODEL_FEMTOCELL_URBAN
+        double floorPenetration;
+        double minimumCouplingLoss;
+        // used in CHANNEL_MODEL_WINNER_DOWNLINK
+        double InternalWallsAttenuation;
+        // used in CHANNEL_MODEL_URBAN_IMT and CHANNEL_MODEL_RURAL_IMT
+        double losProbability;
+        double dbp, dbp1;
+        double randomProb;
+        //srand(time(nullptr));
+        double A, B, C;
+        int* nbWalls;
+        
+        switch(m_channelModel)
         {
-          if(distance < dbp)
+            case CHANNEL_MODEL_MACROCELL_URBAN:
+                /*
+                 * According to 3GPP TR 36.942
+                 * the Path Loss Model For Urban Environment is
+                 * L =  80dB + 40 ⋅ (1 − 4 ⋅ 10 − 3 ⋅ Dhb) ⋅ log 10 (R) − 18 ⋅ log 10 (Dhb) + 21 ⋅ log 10 (f)
+                 * R, in kilometers, is the distance between two nodes
+                 * Dhb, in meters, is the height of the base station above rooftop level
+                 * f, in MHz, is the carrier frequency
+                 */
+                m_pathLoss = 80 + 40*( 1 - 4 * 0.001 * (Henb-Hb) )*log10(distance * 0.001) - 18*log10(Henb-Hb) + 21*log10(f);
+                if ( ue->IsIndoor() )
+                {
+                    ExternalWallsAttenuation = 20; //[dB]
+                    m_pathLoss = m_pathLoss + ExternalWallsAttenuation;
+                }
+                break;
+                
+            case CHANNEL_MODEL_3GPP_CASE1:
+            case CHANNEL_MODEL_MACROCELL_SUB_URBAN :
+                /*
+                 * According to  ---  insert standard 3gpp ---
+                 * the Path Loss Model For Urban Environment is
+                 * L = I + 37.6log10(R)
+                 * R, in kilometers, is the distance between two nodes
+                 * I = 128.1 at 2GHz
+                 */
+                m_pathLoss = 128.1 + (37.6 * log10 (distance * 0.001));
+                break;
+                
+                
+            case CHANNEL_MODEL_MACROCELL_RURAL:
+                /*
+                 * According to  ---  insert standard 3gpp ---
+                 * the Path Loss Model For Rural Environment is
+                 * L (R)= 69.55 +26.16log 10 (f)–13.82log 10 (Hb)+[44.9-6.55log 10 (Hb)]log(R) – 4.78(Log 10 (f)) 2 +18.33 log 10 (f) -40.94
+                 * R, in kilometers, is the distance between two nodes
+                 * f, in MHz, is the carrier frequency
+                 * Hb, in meters, is the base station antenna height above ground
+                 */
+                m_pathLoss = 69.55 + 26.16*log10(f) - 13.82*log10(Henb) + (44.9-6.55*log10(Henb))*log10(distance * 0.001) - 4.78*pow(log10(f),2) + 18.33*log10(f) - 40.94;
+                break;
+                
+                
+            case CHANNEL_MODEL_MICROCELL:
+                /*
+                 * According to  ---  insert standard 3gpp ---
+                 * the Path Loss Model For Rural Environment is
+                 * L = 24 + 345log10(R)   * R, in meters, is the distance between two nodes
+                 */
+                m_pathLoss = 24 + (45 * log10 (distance));
+                break;
+                
+                
+            case CHANNEL_MODEL_FEMTOCELL_URBAN:
+                /*
+                 * Path loss Models from sect. 5.2 in
+                 * 3GPP TSG RAN WG4 R4-092042
+                 *
+                 * Alternative simplified model based on LTE-A evaluation methodology which avoids modeling any walls.
+                 */
+                
+                minimumCouplingLoss = 45; //[dB] - see 3GPP TSG RAN WG4 #42bis (R4-070456)
+                floorPenetration = 0.0;
+                //18.3 n ((n+2)/(n+1)-0.46)
+                
+                if( gnb->GetCell()->GetCellCenterPosition()->GetFloor() > 0
+                   && ue->IsIndoor()
+                   && gnb->GetCell()->GetCellCenterPosition()->GetFloor() != ue->GetCell()->GetCellCenterPosition()->GetFloor())
+                {
+                    int n = (int) abs( gnb->GetCell()->GetCellCenterPosition()->GetFloor() - ue->GetCell()->GetCellCenterPosition()->GetFloor() );
+                    floorPenetration = 18.3 * pow( n, ((n+2)/(n+1)-0.46));
+                }
+                m_pathLoss = max( minimumCouplingLoss, 127 + ( 30 * log10 (distance * 0.001) ) + floorPenetration);
+                break;
+                
+                
+            case CHANNEL_MODEL_3GPP_DOWNLINK:
+                /*
+                 * Path Loss Model For Indoor Environment.
+                 * L = 37 + 30 Log10(R) , R in meters
+                 * at the same floor
+                 */
+                m_pathLoss = 37 + (30 * log10 (distance));
+                break;
+                
+                
+            case CHANNEL_MODEL_WINNER_DOWNLINK:
+                /*
+                 * Path Loss Model For Indoor Environment.
+                 * "WINNER II channel models, ver 1.1, Tech Report"
+                 * PL = A*log10(r) + B + C*log10(fc/5) + X; [r in meters; fc in GHz]
+                 * I = 128.1 – 2GHz
+                 * X depends on the number of walls in between
+                 * FL = 17 + 4 (Nfloors - 1) --- floor loss
+                 */
+                assert (dst->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION  || src->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION);
+                
+                nbWalls = GetWalls( (Femtocell*) (gnb->GetCell()), ue);
+                
+                ExternalWallsAttenuation = 20.0;
+                InternalWallsAttenuation = 10.0;
+                
+                if (nbWalls[0] == 0 && nbWalls[1] == 0)
+                { //LOS
+                    A = 18.7;
+                    B = 46.8;
+                    C = 20.0;
+                }
+                else
+                { //NLOS
+                    A = 20.0;
+                    B = 46.4;
+                    C = 20.0;
+                }
+                
+                m_pathLoss = A * log10( distance ) +
+                B +
+                C * log10(2. / 5.0) +
+                InternalWallsAttenuation * nbWalls[1] +
+                ExternalWallsAttenuation * nbWalls[0];
+                
+                delete [] nbWalls;
+                break;
+                
+                
+            case CHANNEL_MODEL_MACROCELL_URBAN_IMT:
+                dbp1 = 4*(Henb-1)*(Hue-1)*(f/300); // 4*(h'BS)*(h'UT)*(f/c)
+                if(m_isLosType)
+                {
+                    if(distance < dbp1)
+                    {
+                        m_pathLoss = 22.0*log10(distance) + 28 + 20*log10(f*0.001);
+                    }
+                    else
+                    {
+                        m_pathLoss = 40*log10(distance) + 7.8 - 18*log10(Henb-1)-18*log10(Hue-1)+2*log10(f*0.001);
+                    }
+                }
+                else
+                {
+                    m_pathLoss = 161.04 - 7.1*log10(20) + 7.5*log10(Hb) - (24.37 - 3.7*pow(Hb/Henb, 2)) * log10(Henb) + (43.42 - 3.1*log10(Henb)) * (log10(distance) - 3) + 20*log10(f * 0.001) - (3.2 * pow(log10(11.75*Hue), 2) - 4.97);
+                }
+                break;
+                
+                
+            case CHANNEL_MODEL_MACROCELL_URBAN_IMT_3D:
+                dbp1 = 4*(Henb-1)*(Hue-1)*(f/300); // 4*(h'BS)*(h'UT)*(f/c)
+                
+                if(m_isLosType)
+                {
+                    if(distance < dbp1)
+                    {
+                        m_pathLoss = 22.0*log10(distance3D) + 28 + 20*log10(f*0.001);
+                    }
+                    else
+                    {
+                        m_pathLoss = 40*log10(distance3D) + 28 + 20*log10(f*0.001) - 9*log10(pow(dbp1,2)+pow(Henb-Hue,2));
+                    }
+                }
+                else
+                {
+                    double W = 20; // street width in meters
+                    m_pathLoss = 161.04 - 7.1*log10(W) + 7.5*log10(Hb) - (24.37 - 3.7*pow(Hb/Henb, 2)) * log10(Henb) + (43.42 - 3.1*log10(Henb)) * (log10(distance3D) - 3) + 20*log10(f * 0.001) - (3.2 * pow(log10(17.625), 2) - 4.97) - 0.6*(Hue-1.5);
+                }
+                
+                if(ue->IsIndoor())
+                {
+                    m_pathLoss += 0.5 * m_indoorDistance;
+                }
+                break;
+                
+                
+            case CHANNEL_MODEL_MACROCELL_RURAL_IMT:
+                dbp = 2*M_PI * Henb * 1.5 * (f/300); // 2pi * hBS * hUT * (f/c)
+                if(m_isLosType)
+                {
+                    if(distance < dbp)
+                    {
+                        m_pathLoss = 20*log10(40*M_PI*distance*(f*0.001/3)) + min(0.03*pow(Hb, 1.72), 10.00)*log10(distance) - min(0.044*pow(Hb, 1.72), 14.77)+0.002*log10(Hb)*distance;
+                    }
+                    else
+                    {
+                        m_pathLoss = 20*log10(40*M_PI*dbp*(f*0.001/3)) + min(0.03*pow(Hb, 1.72), 10.00)*log10(dbp) - min(0.044*pow(Hb, 1.72), 14.77)+0.002*log10(Hb)*dbp + (40*log10(distance/dbp));
+                    }
+                }
+                else
+                {
+                    m_pathLoss = 161.04 - 7.1*log10(20) + 7.5*log10(Hb) - (24.37 - 3.7*pow(Hb/Henb, 2)) * log10(Henb) + (43.42 - 3.1*log10(Henb)) * (log10(distance) - 3) + 20*log10(f * 0.001) - (3.2 * pow(log10(11.75*1.5), 2) - 4.97);
+                }
+                break;
+                
+                
+        }
+        
+        if( gnb->GetPhy ()->GetAntennaParameters ()->GetType() == Phy::AntennaParameters::ANTENNA_TYPE_TRI_SECTOR )
+        {
+            double gnb_bearing = gnb->GetPhy ()->GetAntennaParameters ()->GetBearing ();
+            double ue_bearing = uePos->GetPolarAzimut (gnbPos) * 57.2957795;
+            double relative_angle = gnb_bearing-ue_bearing;
+            
+            // adjust to [-180°, +180]
+            while (relative_angle >  180 ) {relative_angle -= 360;}
+            while (relative_angle < -180 ) {relative_angle += 360;}
+            
+            double antennaGain = gnb->GetPhy ()->GetAntennaParameters ()->GetGain ();
+            double max_attenuation_h = gnb->GetPhy ()->GetAntennaParameters ()->GetMaxHorizontalAttenuation ();
+            double beamwidth_3dB_h = gnb->GetPhy ()->GetAntennaParameters ()->GetHorizontalBeamwidth3db ();
+            double directional_loss_h = +min( 12*pow(relative_angle/beamwidth_3dB_h,2),max_attenuation_h);
+            double relative_angle_v = atan(
+                                           (gnbPos->GetCoordinateZ () - uePos->GetCoordinateZ ()) /
+                                           uePos->GetDistance(gnbPos)
+                                           ) * 57.2957795;
+            double max_attenuation_v = gnb->GetPhy ()->GetAntennaParameters ()->GetMaxVerticalAttenuation ();
+            double beamwidth_3dB_v = gnb->GetPhy ()->GetAntennaParameters ()->GetVerticalBeamwidth3db ();
+            double etilt = gnb->GetPhy()->GetAntennaParameters ()->GetEtilt();
+            double directional_loss_v = +min(12*pow((relative_angle_v-etilt)/beamwidth_3dB_v,2), max_attenuation_v);
+            double directional_loss;
+            if (beamwidth_3dB_v == 0)
             {
-              m_pathLoss = 20*log10(40*M_PI*distance*(f*0.001/3)) + min(0.03*pow(Hb, 1.72), 10.00)*log10(distance) - min(0.044*pow(Hb, 1.72), 14.77)+0.002*log10(Hb)*distance;
+                directional_loss = directional_loss_h;
             }
-          else
+            else
             {
-              m_pathLoss = 20*log10(40*M_PI*dbp*(f*0.001/3)) + min(0.03*pow(Hb, 1.72), 10.00)*log10(dbp) - min(0.044*pow(Hb, 1.72), 14.77)+0.002*log10(Hb)*dbp + (40*log10(distance/dbp));
+                directional_loss = min((directional_loss_h+directional_loss_v), max_attenuation_h);
             }
+            m_pathLoss += - antennaGain + directional_loss;
+            
+            DEBUG_LOG_START_1(SIM_ENV_TRIPLE_SECTOR_DEBUG)
+            cout << "ID UE: " << ue->GetIDNetworkNode()
+            << ",\tID gNB: " << gnb->GetIDNetworkNode()
+            << ",\tX: " << uePos->GetCoordinateX()
+            << ",\tY: " << uePos->GetCoordinateY()
+            << ",\tAngle " << relative_angle
+            << ",\tLoss: " << directional_loss
+            << endl;
+            DEBUG_LOG_END
         }
-      else
-        {
-          m_pathLoss = 161.04 - 7.1*log10(20) + 7.5*log10(Hb) - (24.37 - 3.7*pow(Hb/Henb, 2)) * log10(Henb) + (43.42 - 3.1*log10(Henb)) * (log10(distance) - 3) + 20*log10(f * 0.001) - (3.2 * pow(log10(11.75*1.5), 2) - 4.97);
-        }
-      break;
-
-
-  }
-
-  if( gnb->GetPhy ()->GetAntennaParameters ()->GetType() == Phy::AntennaParameters::ANTENNA_TYPE_TRI_SECTOR )
-    {
-      double gnb_bearing = gnb->GetPhy ()->GetAntennaParameters ()->GetBearing ();
-      double ue_bearing = uePos->GetPolarAzimut (gnbPos) * 57.2957795;
-      double relative_angle = gnb_bearing-ue_bearing;
-
-      // adjust to [-180°, +180]
-      while (relative_angle >  180 ) {relative_angle -= 360;}
-      while (relative_angle < -180 ) {relative_angle += 360;}
-
-      double antennaGain = gnb->GetPhy ()->GetAntennaParameters ()->GetGain ();
-      double max_attenuation_h = gnb->GetPhy ()->GetAntennaParameters ()->GetMaxHorizontalAttenuation ();
-      double beamwidth_3dB_h = gnb->GetPhy ()->GetAntennaParameters ()->GetHorizontalBeamwidth3db ();
-      double directional_loss_h = +min( 12*pow(relative_angle/beamwidth_3dB_h,2),max_attenuation_h);
-      double relative_angle_v = atan(
-                                  (gnbPos->GetCoordinateZ () - uePos->GetCoordinateZ ()) /
-                                  uePos->GetDistance(gnbPos)
-                                ) * 57.2957795;
-      double max_attenuation_v = gnb->GetPhy ()->GetAntennaParameters ()->GetMaxVerticalAttenuation ();
-      double beamwidth_3dB_v = gnb->GetPhy ()->GetAntennaParameters ()->GetVerticalBeamwidth3db ();
-      double etilt = gnb->GetPhy()->GetAntennaParameters ()->GetEtilt();
-      double directional_loss_v = +min(12*pow((relative_angle_v-etilt)/beamwidth_3dB_v,2), max_attenuation_v);
-      double directional_loss;
-      if (beamwidth_3dB_v == 0)
-        {
-          directional_loss = directional_loss_h;
-        }
-      else
-        {
-          directional_loss = min((directional_loss_h+directional_loss_v), max_attenuation_h);
-        }
-      m_pathLoss += - antennaGain + directional_loss;
-
-DEBUG_LOG_START_1(SIM_ENV_TRIPLE_SECTOR_DEBUG)
-      cout << "ID UE: " << ue->GetIDNetworkNode()
-        << ",\tID gNB: " << gnb->GetIDNetworkNode()
-        << ",\tX: " << uePos->GetCoordinateX()
-        << ",\tY: " << uePos->GetCoordinateY()
-        << ",\tAngle " << relative_angle
-        << ",\tLoss: " << directional_loss
-        << endl;
-DEBUG_LOG_END
+        
+        double feederLoss = src->GetPhy()->GetAntennaParameters()->GetFeederLoss();
+        
+        return m_pathLoss + feederLoss;
     }
-
-  double feederLoss = src->GetPhy()->GetAntennaParameters()->GetFeederLoss();
-
-  return m_pathLoss + feederLoss;
 }
 
 void
@@ -1079,6 +1093,78 @@ DEBUG_LOG_START_2(SIM_ENV_TEST_PROPAGATION_LOSS_MODEL,SIM_ENV_TEST_GET_LOSS)
 DEBUG_LOG_END
         }
     }
+    
+    DEBUG_LOG_START_1(SIM_ENV_TEST_BEAMFORMING_GAIN_SHAPE)
+    //This debug forces the user to turn around the base station and collects data about the
+    //beamforming gain. The purpose is to be able to polar plot the horizontal section of the beams
+    //angles.txt contains the angles of the user's round.
+    //beamformingdata.txt contains a matrix of as many rows as the beams and as many columns as the angles
+    if (Simulator::Init()->Now() >= 1 && Simulator::Init()->Now() <= 1.2 && nbOfPaths > 1)
+    {
+        //Get the user and enb for getting the M and beam index values
+        UserEquipment* ue;
+        GNodeB* enb;
+        
+        if (m_src->GetNodeType () == NetworkNode::TYPE_UE
+            && ( m_dst->GetNodeType () == NetworkNode::TYPE_GNODEB
+                || m_dst->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION) )
+        {
+            ue = (UserEquipment*) m_src;
+            enb = (GNodeB*) m_dst;
+        }
+        else if (m_dst->GetNodeType () == NetworkNode::TYPE_UE
+                 && ( m_src->GetNodeType () == NetworkNode::TYPE_GNODEB
+                     || m_src->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION) )
+        {
+            ue = (UserEquipment*) m_dst;
+            enb = (GNodeB*) m_src;
+        }
+        
+        //Get the beamforming parameters
+        int M = enb->GetPhy ()->GetTxAntennas ();
+        int numberOfBeams = M/2;
+        int beam_index;
+        double gain;
+        std::ofstream f("beamformingdata.txt");
+        std::ofstream f2("angles.txt");
+        //Creating the model for circular motion of the user
+        //Storing the original movement
+        double x_old = ue->GetMobilityModel()->GetAbsolutePosition()->GetCoordinateX();
+        double y_old = ue->GetMobilityModel()->GetAbsolutePosition()->GetCoordinateY();
+        //Get enb position
+        double enbx = enb->GetMobilityModel()->GetAbsolutePosition()->GetCoordinateX();
+        double enby = enb->GetMobilityModel()->GetAbsolutePosition()->GetCoordinateY();
+        //Initialize the position of the user
+        double radius = 500;
+        ue->GetMobilityModel()->GetAbsolutePosition()->SetCoordinateX(enbx);
+        ue->GetMobilityModel()->GetAbsolutePosition()->SetCoordinateY(enby-radius);
+        double theta;
+        double angleStep = 0.01;
+        double x, y;
+        for (int i = 0; i < numberOfBeams; i++)
+        {
+            
+            theta = 1.5*M_PI;
+            while (theta<2.5*M_PI/*theta < 2*M_PI*/){
+                x = radius * cos(theta);
+                y = radius * sin(theta);
+                ue->GetMobilityModel()->GetAbsolutePosition()->SetCoordinateX(enbx + x);
+                ue->GetMobilityModel()->GetAbsolutePosition()->SetCoordinateY(enby + y);
+                gain = GetBeamformingGainForBeamShape(i);
+                f << gain << " ";
+                if(i == 0)
+                    f2 << theta << " ";
+                theta += angleStep;
+            }
+            f << endl;
+        }
+        f.close();
+        f2.close();
+        ue->GetMobilityModel()->GetAbsolutePosition()->SetCoordinateX(x_old);
+        ue->GetMobilityModel()->GetAbsolutePosition()->SetCoordinateY(y_old);
+    }
+    
+    DEBUG_LOG_END
 
   return loss;
 }
@@ -1227,8 +1313,8 @@ ChannelRealization::UpdateFastFading (void)
     {
       speed = 0;
     }
-
-  int txMode = ue->GetTargetNodeRecord()->GetDlTxMode();
+  //TODO: CHECK GD i'm interested in this... why did you change this?
+  int txMode = ue->GetTargetNode()->GetMacEntity()->GetDefaultDlTxMode();
 
   // number of antennas for MIMO configurations
   int M;
@@ -1344,7 +1430,7 @@ DEBUG_LOG_END
                   m_fastFadingPhases->at(j).push_back (ff_phases);
                 }
             }
-          else if(M==1 && N==4)
+          else if((M==1 && N==4) || (M==4 && N==1))
             {
               for (int j = 0; j < M*N; j++)
                 {
@@ -1506,7 +1592,7 @@ DEBUG_LOG_END
                   m_fastFadingPhases->at(j).push_back (ff_phases);
                 }
             }
-          else if(M==8 && N==1)
+          else if((M==8 && N==1) || (M==1 && N==8))
             {
               if (txMode == 11)
                 {
@@ -1563,7 +1649,7 @@ DEBUG_LOG_END
                     }
                 }
             }
-          else if(M==8 && N==2)
+          else if((M==8 && N==2) || (M==2 && N==8))
             {
               if (txMode == 11)
                 {
@@ -1634,7 +1720,7 @@ DEBUG_LOG_END
             }
 
 
-          else if(M==16 && N==1)
+          else if((M==16 && N==1) || (M==1 && N==16))
             {
               for (int j = 0; j < M*N; j++)
                 {
@@ -1649,7 +1735,10 @@ DEBUG_LOG_END
                         break;
                       case 1:
                         start_point_time_XPOL = start_point_time_XPOL1;
-                        j2 = j%(M/2);
+                            if (M==16)
+                                j2 = j%(M/2);
+                            else
+                                j2 = j%(N/2);
                         break;
                       default:
                         cout << "Error: unhandled case in ChannelRealization" << endl;
@@ -1680,7 +1769,7 @@ DEBUG_LOG_END
                   m_fastFadingPhases->at(j).push_back (ff_phases);
                 }
             }
-          else if(M==16 && N==2)
+          else if((M==16 && N==2) || (M==2 && N==16))
             {
               if (txMode == 11)
                 {
@@ -1776,7 +1865,8 @@ DEBUG_LOG_END
                     }
                 }
             }
-          else if(M==16 && N==4)
+          //TODO: CHECK GD in your code this was different, probably it was an error
+          else if((M==16 && N==4) || (M==16 && N==4))
           {
               for (int j = 0; j < M*N; j++)
               {
@@ -1825,7 +1915,7 @@ DEBUG_LOG_END
                   m_fastFadingPhases->at(j).push_back (ff_phases);
               }
           }
-          else if(M==32 && N==1)
+          else if((M==32 && N==1) || (M==1 && N==32))
             {
               for (int j = 0; j < M*N; j++)
                 {
@@ -1839,7 +1929,10 @@ DEBUG_LOG_END
                             break;
                           case 1:
                             start_point_time_XPOL = start_point_time_XPOL1;
-                            j2 = j%(M/2);
+                            if (M==32)
+                                j2 = j%(M/2);
+                            else
+                                j2 = j%(N/2);
                             break;
                           default:
                             cout << "Error: unhandled case in ChannelRealization" << endl;
@@ -1878,7 +1971,7 @@ DEBUG_LOG_END
                   m_fastFadingPhases->at(j).push_back (ff_phases);
                 }
             }
-          else if(M==32 && N==2)
+          else if((M==32 && N==2) || (M==2 && N==32))
             {
               for (int j = 0; j < M*N; j++)
                 {
@@ -1938,7 +2031,7 @@ DEBUG_LOG_END
                   m_fastFadingPhases->at(j).push_back (ff_phases);
                 }
             }
-          else if(M==32 && N==4)
+          else if((M==32 && N==4) || (M==4 && N==32))
             {
               for (int j = 0; j < M*N; j++)
                 {
@@ -1995,7 +2088,7 @@ DEBUG_LOG_END
                   m_fastFadingPhases->at(j).push_back (ff_phases);
                 }
             }
-          else if(M==32 && N==8)
+          else if((M==32 && N==8) || (M==8 && N==32))
             {
               for (int j = 0; j < M*N; j++)
                 {
@@ -2098,4 +2191,213 @@ bool
 ChannelRealization::isMbsfnRealization(void)
 {
   return m_mbsfnRealization;
+}
+
+double ChannelRealization::GetBeamformingGainForBeamShape(int beam_index)
+{
+    
+    UserEquipment* ue;
+    GNodeB* gnb;
+    
+    if (m_src->GetNodeType () == NetworkNode::TYPE_UE
+        && ( m_dst->GetNodeType () == NetworkNode::TYPE_GNODEB
+            || m_dst->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION) )
+    {
+        ue = (UserEquipment*) m_src;
+        gnb = (GNodeB*) m_dst;
+    }
+    else if (m_dst->GetNodeType () == NetworkNode::TYPE_UE
+             && ( m_src->GetNodeType () == NetworkNode::TYPE_GNODEB
+                 || m_src->GetNodeType () == NetworkNode::TYPE_HOME_BASE_STATION) )
+    {
+        ue = (UserEquipment*) m_dst;
+        gnb = (GNodeB*) m_src;
+    }
+    int txMode = ue->GetTargetNodeRecord()->GetDlTxMode();
+    bool use_GoB = false;
+    if (txMode == 11)
+    {
+        use_GoB = true;
+    }
+    
+    double gain;
+    
+    if(use_GoB && m_src->GetNodeType()==NetworkNode::TYPE_GNODEB)
+    {
+        int M = gnb->GetPhy ()->GetTxAntennas ();
+        int N = ue->GetPhy ()->GetRxAntennas ();
+        
+        int num_beams;
+        //int beam_index;
+        
+        
+        /*
+         * The /2 factor comes from the assumption of using couples of cross-polarized antenna elements.
+         * Remove if you want to assume an array of equally polarized elements.
+         */
+        num_beams = gnb->GetPhy ()->GetTxAntennas ()/2;
+        //beam_index = path % (M/2);
+        
+        
+        int beam_antennas_h = 16; // number of antennas to create the beam
+        int beam_antennas_v = 8; // number of antennas to create the beam
+        double f = gnb->GetPhy ()->GetCarrierFrequency () * pow (10,6);;
+        float const speedOfLight = 3 * pow (10,8);
+        double lambda = speedOfLight / f;
+        double antenna_spacing_h = lambda / 2;
+        double antenna_spacing_v = lambda / 2;
+        double k = 2 * M_PI / lambda;
+        
+        
+        CartesianCoordinates* uePos = ue->GetMobilityModel ()->GetAbsolutePosition ();
+        CartesianCoordinates* enbPos = gnb->GetMobilityModel ()->GetWrapAroundPosition(uePos);
+        double array_bearing = gnb->GetPhy ()->GetAntennaParameters ()->GetBearing()*M_PI/180.0;
+        
+        // UE horizontal angle compared to antenna boresight
+        double dst_angle_h = uePos->GetPolarAzimut(enbPos) - array_bearing;
+        if ( dst_angle_h > M_PI )
+        {
+            dst_angle_h -= (2*M_PI);
+        }
+        
+        
+        
+        double grid_angle_h_min = - M_PI / 3;
+        double grid_angle_h_max = + M_PI / 3;
+        
+        if(std::getenv("USE_COVERSHIFT") != nullptr)
+        {
+            double sector_width = grid_angle_h_max - grid_angle_h_min;
+            double threshold = 3./8.;
+            
+            GnbPhy* src = (GnbPhy*)(gnb->GetPhy());
+            int index;
+            if (m_forceCoverShift != -1)
+            {
+                if (m_forceCoverShift<0 || m_forceCoverShift>=3)
+                {
+                    cout << "Error: forced invalid cover shift (" << m_forceCoverShift << ")!" << endl;
+                }
+                index = m_forceCoverShift;
+            }
+            else
+            {
+                index = FrameManager::Init()->GetCoverShiftIndex();
+            }
+            
+            if(src->GetAntennaParameters()->GetBearing()==0)
+            {
+                if(index==0)
+                {
+                    grid_angle_h_min = grid_angle_h_min + sector_width * 0.32;
+                    grid_angle_h_max = grid_angle_h_max - sector_width * 0.32;
+                }
+                else if(index==1)
+                {
+                    grid_angle_h_min = grid_angle_h_min + sector_width * 0.65;
+                }
+                else if(index==2)
+                {
+                    grid_angle_h_max = grid_angle_h_max - sector_width * 0.65;
+                }
+            }
+            else if(src->GetAntennaParameters()->GetBearing()==120)
+            {
+                if(index==0)
+                {
+                    grid_angle_h_max = grid_angle_h_max - sector_width * 0.65;
+                }
+                else if(index==1)
+                {
+                    grid_angle_h_min = grid_angle_h_min + sector_width * 0.32;
+                    grid_angle_h_max = grid_angle_h_max - sector_width * 0.32;
+                }
+                else if(index==2)
+                {
+                    grid_angle_h_min = grid_angle_h_min + sector_width * 0.65;
+                }
+            }
+            else if(src->GetAntennaParameters()->GetBearing()==240)
+            {
+                if(index==0)
+                {
+                    grid_angle_h_min = grid_angle_h_min + sector_width * 0.65;
+                }
+                else if(index==1)
+                {
+                    grid_angle_h_max = grid_angle_h_max - sector_width * 0.65;
+                }
+                else if(index==2)
+                {
+                    grid_angle_h_min = grid_angle_h_min + sector_width * 0.32;
+                    grid_angle_h_max = grid_angle_h_max - sector_width * 0.32;
+                }
+            }
+            
+        }
+        
+        // beam horizontal angle compared to antenna boresight
+        // first beam is on the highest positive angle
+        double grid_area_width = grid_angle_h_max - grid_angle_h_min;
+        double beam_angle_h = grid_angle_h_min + grid_area_width / num_beams / 2 * (2 * beam_index + 1);
+        double beam_to_dst_angle_h = beam_angle_h - dst_angle_h;
+        double phase_shift_h = -k * antenna_spacing_h * sin( beam_angle_h );
+        double psi_h = k * antenna_spacing_h * sin( dst_angle_h ) + phase_shift_h;
+        double gain_h = abs((double) 1 / ( beam_antennas_h ) * sin( beam_antennas_h * psi_h / 2 ) / sin( psi_h / 2 ) );
+        //return 20 * log10( gain_h );
+        double dst_angle_v = atan((enbPos->GetCoordinateZ() - uePos->GetCoordinateZ()) / (enbPos->GetDistance(uePos)));
+        
+        double beam_angle_v;
+        if (beam_index%2 == 0)
+        {
+            beam_angle_v = 15*M_PI/180;
+        }
+        else
+        {
+            beam_angle_v = 25*M_PI/180;
+        }
+        
+        double beam_to_dst_angle_v = beam_angle_v - dst_angle_v;
+        double phase_shift_v = -k * antenna_spacing_v * sin( beam_angle_v );
+        double psi_v = k * antenna_spacing_v * sin( dst_angle_v ) + phase_shift_v;
+        double gain_v = abs((double) 1 / ( beam_antennas_v ) * sin( beam_antennas_v * psi_v / 2 ) / sin( psi_v / 2 ) );
+        
+        gain = 20 * log10(gain_h * gain_v);
+        
+        
+        if(Simulator::Init()->Now()>0.01 &&false){
+            GnbPhy* src = (GnbPhy*)(gnb->GetPhy());
+            cout
+            << "beam " << beam_index
+            //<< ", path " << path
+            << ", BS bearing " << src->GetAntennaParameters()->GetBearing()
+            << ", gain_h " << 20 * log10( gain_h ) << " dB"
+            << ", dst_angle_h " << dst_angle_h*180/M_PI << "°"
+            << ", beam_angle_h " << beam_angle_h*180/M_PI << "°"
+            << ", beam_to_dst_angle_h " << beam_to_dst_angle_h*180/M_PI << "°"
+            << ", gain " << gain << " dB"
+            << ", eNB " << gnb->GetIDNetworkNode()
+            << ", UE " << ue->GetIDNetworkNode()
+            << endl;
+            
+            cout
+            << "beam " << beam_index
+            //<< ", path " << path
+            << ", BS bearing " << src->GetAntennaParameters()->GetBearing()
+            << ", gain_v " << 20 * log10( gain_v ) << " dB"
+            << ", dst_angle_v " << dst_angle_v*180/M_PI << "°"
+            << ", beam_angle_v " << beam_angle_v*180/M_PI << "°"
+            << ", beam_to_dst_angle_v " << beam_to_dst_angle_v*180/M_PI << "°"
+            << ", gain " << gain << " dB"
+            << ", eNB " << gnb->GetIDNetworkNode()
+            << ", UE " << ue->GetIDNetworkNode()
+            << endl;
+        }
+        
+    }
+    else
+    {
+        gain = 0;
+    }
+    return gain;
 }

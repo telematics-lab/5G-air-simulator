@@ -113,6 +113,11 @@ public:
 
   void
   Print ();
+    
+  void
+  SetRtts(double); //for priority scheduling
+  double
+  GetRtts(void); //for priority scheduling
 
 private:
   double m_timeStamp;
@@ -127,6 +132,8 @@ private:
   MACHeader *m_MACHeader;
 
   PacketTAGs *m_tags;
+    
+    double m_rtts;
 };
 
 #endif /* PACKET_H_ */

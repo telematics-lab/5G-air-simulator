@@ -231,3 +231,14 @@ Mobility::GetTopologyBorder (void)
       break;
     }
 }
+
+
+void
+Mobility::SetDoHandoverFlag(bool flag) {
+    m_doHandoverFlag = flag;
+}
+
+bool
+Mobility::GetDoHandoverFlag(void) {
+    return m_doHandoverFlag;
+}

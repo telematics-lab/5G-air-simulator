@@ -28,7 +28,7 @@ AmdRecord::AmdRecord (Packet* p, int sn)
   m_packet = p;
   m_sn = sn;
   m_retx_count = 0;
-  m_retx_count_timer = 10;
+  m_retx_count_timer = 10; //3 //TODO: CHECK GD it is necessary to have 3 instead of 10? Maybe you can change these values in the scenario if you need
   m_toRetransmit = false;
 }
 

@@ -16,42 +16,31 @@
  * You should have received a copy of the GNU General Public License
  * along with 5G-air-simulator; if not, see <http://www.gnu.org/licenses/>.
  *
- * Author: Telematics Lab <telematics-dev@poliba.it>
+ * Author: Gabriele Roncella <gabriele.roncella@student.unisi.it>
+ * Author: Dinesh Tamang <dinesh.tamang@student.unisi.it>
  */
 
+#ifndef SRC_PROTOCOLSTACK_MAC_PACKET_SCHEDULER_PRIORITY_UPLINK_PACKET_SCHEDULER_H_
+#define SRC_PROTOCOLSTACK_MAC_PACKET_SCHEDULER_PRIORITY_UPLINK_PACKET_SCHEDULER_H_
 
-#ifndef HANDOVERENTITY_H_
-#define HANDOVERENTITY_H_
+#include "uplink-packet-scheduler.h"
 
-class NetworkNode;
-class UserEquipment;
-class HoManager;
-
-class HandoverEntity
+class PriorityUplinkPacketScheduler : public UplinkPacketScheduler
 {
 public:
-  HandoverEntity();
-  virtual ~HandoverEntity();
-
-  void SetDevice (NetworkNode* d);
-  NetworkNode* GetDevice ();
-
-  void SetHoManager (HoManager *h);
-  HoManager* GetHoManager (void);
-
-  void SetDetachTime (double t);
-  double GetDetachTime (void);
-
-  bool CheckHandoverNeed (UserEquipment* ue);
-
-  // TODO: CHECK GD this methods are inside the managers where they should be
-  // bool CheckDetachTimeForTwin(UserEquipment* twin);
-  // void CalculatePower(UserEquipment* ue);
-
+    PriorityUplinkPacketScheduler (GnbMacEntity*);
+    virtual ~PriorityUplinkPacketScheduler();
+        
+    void SelectUsersToSchedule (void);
+    void DoSchedule (void);
+    void RBsAllocation ();
+    
+    virtual double ComputeSchedulingMetric (UserToSchedule* user, int subchannel);
+    
 private:
-  NetworkNode* m_device;
-  HoManager* m_hoManager;
-  double m_detachTime;
+    int m_index2;
 };
 
-#endif /* HANDOVERENTITY_H_ */
+
+
+#endif /* SRC_PROTOCOLSTACK_MAC_PACKET_SCHEDULER_PRIORITY_UPLINK_PACKET_SCHEDULER_H_ */

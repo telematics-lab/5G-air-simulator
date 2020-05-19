@@ -32,7 +32,7 @@ HarqManager::HarqManager()
 {
   m_maxProcesses = 8;
   m_maxRetransmissions = 4;
-  m_retransmissionDelay = 0.008;
+  m_retransmissionDelay = 0.008; //TODO: CHECK GD why this walue was edited to 0.004 ? If needed, it is better to modify the value from the scenario
   m_txProcesses.clear ();
   m_rxProcesses.clear ();
   m_ue = nullptr;

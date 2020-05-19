@@ -37,15 +37,15 @@
 #include "../../protocolStack/application/application-entity.h"
 #include "../../protocolStack/mac/random-access/ue-enhanced-random-access.h"
 
-Application::Application()
-{
-  m_classifierParameters = nullptr;
-  m_qosParameters = nullptr;
-  m_source = nullptr;
-  m_destination = nullptr;
-  m_radioBearer = nullptr;
-  m_bearerSink = nullptr;
-  m_applicationSink = nullptr;
+Application::Application() {
+    m_classifierParameters = nullptr;
+    m_qosParameters = nullptr;
+    m_source = nullptr;
+    m_destination = nullptr;
+    m_radioBearer = nullptr;
+    m_bearerSink = nullptr;
+    m_applicationSink = nullptr;
+    m_stopFlow = false;
 }
 
 void
@@ -465,6 +465,16 @@ Application::Trace (Packet* p)
         cout << " EXTERNAL_SOURCE";
         break;
       }
+    case Application::APPLICATION_TYPE_TWIN_VOIP:
+      {
+        cout << " TVOIP";
+        break;
+      }
+    case Application::APPLICATION_TYPE_TWIN_CBR:
+      {
+        cout << " TCBR";
+        break;
+      }
     default:
       {
         cout << " UNDEFINED";
@@ -472,6 +482,7 @@ Application::Trace (Packet* p)
       }
     }
 
+  //TODO: CHECK GD (in your code the output was changed -> we can't do this -> verify everything works as intended with this output)
   if (GetDestination ()->GetNodeType() == NetworkNode::TYPE_UE)
     {
       UserEquipment* ue = (UserEquipment*) GetDestination ();
@@ -483,7 +494,8 @@ Application::Trace (Packet* p)
                 << " T " << Simulator::Init()->Now()
                 << " " << ue->IsIndoor () << endl;
       UeMacEntity* mac = ue->GetMacEntity();
-      Simulator::Init()->Schedule(0, &UeRandomAccess::StartRaProcedure, mac->GetRandomAccessManager());
+      if(ue->GetNodeState()==NetworkNode::STATE_ACTIVE||ue->GetNodeState()==NetworkNode::STATE_IDLE)
+          Simulator::Init()->Schedule(0, &UeRandomAccess::StartRaProcedure, mac->GetRandomAccessManager());
 
     }
   else
@@ -498,7 +510,8 @@ Application::Trace (Packet* p)
       {
     	  UserEquipment* ue = (UserEquipment*) GetSource ();
     	  UeMacEntity* mac = ue->GetMacEntity();
-    	  Simulator::Init()->Schedule(0, &UeRandomAccess::StartRaProcedure, mac->GetRandomAccessManager());
+          if(ue->GetNodeState()==NetworkNode::STATE_ACTIVE||ue->GetNodeState()==NetworkNode::STATE_IDLE)
+              Simulator::Init()->Schedule(0, &UeRandomAccess::StartRaProcedure, mac->GetRandomAccessManager());
       }
     }
 }
@@ -511,3 +524,62 @@ Application::Print (void)
        endl;
 }
 
+
+//TODO: CHECK GD why some methods here and not inside VoIP or CBR ?
+void
+Application::SetState(bool state) {
+    m_stateON = state;
+}
+
+void
+Application::SetStateDuration(double duration) {
+    m_stateDuration = duration;
+}
+
+void
+Application::SetEndState(double endstate) {
+    m_endState = endstate;
+}
+
+bool
+Application::GetState(void) {
+    return m_stateON;
+}
+
+double
+Application::GetStateDuration(void) {
+    return m_stateDuration;
+}
+
+double
+Application::GetEndState(void) {
+    return m_endState;
+}
+
+
+void
+Application::SetLastPacketCreationTime(double time) {
+    m_lastPacketCreationTime = time;
+}
+
+double
+Application::GetLastPacketCreationTime(void) {
+    return m_lastPacketCreationTime;
+}
+
+void
+Application::SetStopFlow(bool flag) {
+    m_stopFlow = flag;
+}
+bool
+Application::GetStopFlow(void) {
+    return m_stopFlow;
+}
+void
+Application::SetInterval(double duration) {
+    m_interval = duration;
+}
+double
+Application::GetInterval(void) {
+    return m_interval;
+}

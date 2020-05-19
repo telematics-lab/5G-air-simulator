@@ -25,6 +25,7 @@
 #include "../../componentManagers/NetworkManager.h"
 #include "../radio-bearer.h"
 #include <math.h>
+#include "../QoS/QoSParameters.h"
 
 VoIP::VoIP()
 {
@@ -35,6 +36,9 @@ VoIP::VoIP()
   m_size = 32; //application + RTP header
   m_stateON = false;
   SetApplicationType (Application::APPLICATION_TYPE_VOIP);
+  
+  m_interval = 0.010;
+
 }
 
 void
@@ -73,6 +77,10 @@ DEBUG_LOG_START_1(SIM_ENV_APPLICATION_DEBUG)
                 << "\n\t state ON Duration = " << m_stateDuration
                 << "\n\t end ON state = " <<  m_endState << endl;
 DEBUG_LOG_END
+        SetState(m_stateON);
+        SetStateDuration(m_stateDuration);
+        SetEndState(m_endState);
+        SetInterval(m_interval);
 
     }
 
@@ -85,11 +93,15 @@ DEBUG_LOG_END
   packet->SetSize (GetSize ());
 
   Trace (packet);
+  SetLastPacketCreationTime(Simulator::Init()->Now());
 
   PacketTAGs *tags = new PacketTAGs ();
   tags->SetApplicationType(PacketTAGs::APPLICATION_TYPE_VOIP);
   tags->SetApplicationSize (packet->GetSize ());
   packet->SetPacketTags(tags);
+  
+  double maxDelay = GetQoSParameters()->GetMaxDelay(); //for priority scheduling
+  packet->SetRtts(maxDelay); //for priority scheduling
 
 
   UDPHeader *udp = new UDPHeader (GetClassifierParameters ()->GetSourcePort (),
@@ -105,7 +117,7 @@ DEBUG_LOG_END
 
   GetRadioBearer()->Enqueue (packet);
 
-
+//TODO: CHECK GD in your code the below instructions were modified... why change the voip model? did you find some errors?
   if (Simulator::Init()->Now () <= m_endState)
     {
       ScheduleTransmit (0.02);
@@ -128,6 +140,10 @@ DEBUG_LOG_START_1(SIM_ENV_APPLICATION_DEBUG)
 DEBUG_LOG_END
 
       ScheduleTransmit (m_stateDuration);
+        SetState(m_stateON);
+        SetStateDuration(m_stateDuration);
+        //SetEndState(m_endState);
+        //SetInterval(m_stateDuration);
     }
 }
 

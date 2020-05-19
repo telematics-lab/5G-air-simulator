@@ -226,6 +226,30 @@ public:
 
   void
   PrintUserPosition (void);
+    
+    //TODO: CHECK GD are you sure this is the right class to implement these methods?
+    // New Methods for Dual Transmission by Twin UE
+    
+    UserEquipment*
+    GetTwinUserEquipmentByID (int idUE);
+    void
+    DualTransmission(UserEquipment* ue, GNodeB* newTarget);
+    void
+    StartTwin (UserEquipment* twin, GNodeB* target);
+    void
+    StopTwin(UserEquipment* twin);
+    double
+    GetShadowingForTwinFromUE(GNodeB* gnb, UserEquipment* ue);
+    double
+    GetPathLossForTwinFromUE(GNodeB* gnb, UserEquipment* ue);
+
+    void
+    CheckPacketsInTwin(UserEquipment* twin);
+    void
+    DeleteTwinBearerOnly(UserEquipment* twin);
+    void
+    DoHandover(UserEquipment* twin);
+    
 };
 
 

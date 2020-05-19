@@ -181,11 +181,13 @@ DEBUG_LOG_END
 
 
       record->SetCQI (cqiFeedback);
+      cqiFeedback.clear();
 
     }
   else
     {
       cout << "ERROR: received cqi from unknown ue!"<< endl;
+      exit(1);
     }
 }
 
@@ -380,4 +382,16 @@ GnbMacEntity::GetDevice(void)
 {
   NetworkNode* node = ((MacEntity*)this)->GetDevice();
   return (GNodeB*)node;
+}
+
+
+//the following method is for uplink mimo
+void
+GnbMacEntity::SetDefaultUlTxMode (int txmode) {
+    m_defaultUlTxMode = txmode;
+}
+//the following method is for uplink mimo
+int
+GnbMacEntity::GetDefaultUlTxMode(void) {
+    return m_defaultUlTxMode;
 }

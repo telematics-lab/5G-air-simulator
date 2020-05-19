@@ -35,27 +35,17 @@
 #include "../../../flows/QoS/QoSParameters.h"
 #include "../../../flows/MacQueue.h"
 
-MaximumThroughputUplinkPacketScheduler::MaximumThroughputUplinkPacketScheduler()
-{
+MaximumThroughputUplinkPacketScheduler::MaximumThroughputUplinkPacketScheduler() {
   SetMacEntity (nullptr);
   CreateUsersToSchedule ();
 }
 
-MaximumThroughputUplinkPacketScheduler::~MaximumThroughputUplinkPacketScheduler()
-{
+MaximumThroughputUplinkPacketScheduler::~MaximumThroughputUplinkPacketScheduler() {
   Destroy ();
 }
 
 double
-MaximumThroughputUplinkPacketScheduler::ComputeSchedulingMetric (UserToSchedule* user, int subchannel)
-{
-  double metric;
-
-  int channelCondition = user->m_channelContition.at (subchannel);
+MaximumThroughputUplinkPacketScheduler::ComputeSchedulingMetric (UserToSchedule* user, int subchannel) {
   AMCModule* amc = user->m_userToSchedule->GetProtocolStack()->GetMacEntity()->GetAmcModule();
-  double spectralEfficiency = amc->GetSinrFromCQI (channelCondition);
-
-  metric = spectralEfficiency * 180000;
-
-  return metric;
+  return amc->GetEfficiencyFromCQI(user->m_channelCondition.at (subchannel)); //METRIC = SPECTRAL EFFICIENCY
 }

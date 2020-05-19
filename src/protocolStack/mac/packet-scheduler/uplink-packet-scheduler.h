@@ -35,14 +35,20 @@ public:
 
   struct UserToSchedule
   {
-    UserEquipment* m_userToSchedule;
-    int m_transmittedData;  //bytes
-    int m_dataToTransmit;   //bytes
-    double m_averageSchedulingGrant; // in bytes
-
-    vector<int> m_listOfAllocatedRBs;
-    int m_selectedMCS;
-    vector<int> m_channelContition; //similar to the CQI for the DL
+      vector< shared_ptr<arma::cx_fmat> > m_fullCsiFeedbacks;//for uplink mimo
+      UserEquipment* m_userToSchedule;
+      int m_transmittedData;  //bytes
+      int m_dataToTransmit;   //bytes
+      double m_averageSchedulingGrant; // in bytes
+      
+      vector<int> m_listOfAllocatedRBs;
+      int m_prioritizedDataToTransmit;
+      int m_selectedMCS;
+      vector<int> m_channelCondition; //similar to the CQI for the DL
+      double m_widebSinr;//for uplink mimo
+      
+      vector<int> m_assignedLayers;//for uplink mimo
+      vector<int> m_listOfSelectedMCS;//for uplink mimo
   };
   typedef vector<UserToSchedule*> UsersToSchedule;
   void CreateUsersToSchedule (void);

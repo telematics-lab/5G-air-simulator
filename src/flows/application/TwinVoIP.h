@@ -16,42 +16,35 @@
  * You should have received a copy of the GNU General Public License
  * along with 5G-air-simulator; if not, see <http://www.gnu.org/licenses/>.
  *
- * Author: Telematics Lab <telematics-dev@poliba.it>
+ * Author: Dinesh Tamang <dinesh.tamang@student.unisi.it>
  */
 
+#include "Application.h"
 
-#ifndef HANDOVERENTITY_H_
-#define HANDOVERENTITY_H_
-
-class NetworkNode;
-class UserEquipment;
-class HoManager;
-
-class HandoverEntity
+class TwinVoIP : public Application
 {
 public:
-  HandoverEntity();
-  virtual ~HandoverEntity();
-
-  void SetDevice (NetworkNode* d);
-  NetworkNode* GetDevice ();
-
-  void SetHoManager (HoManager *h);
-  HoManager* GetHoManager (void);
-
-  void SetDetachTime (double t);
-  double GetDetachTime (void);
-
-  bool CheckHandoverNeed (UserEquipment* ue);
-
-  // TODO: CHECK GD this methods are inside the managers where they should be
-  // bool CheckDetachTimeForTwin(UserEquipment* twin);
-  // void CalculatePower(UserEquipment* ue);
-
+    TwinVoIP();
+    virtual ~TwinVoIP() = default;
+    
+    void DoStart (void);
+    void DoStop (void);
+    
+    void ScheduleTransmit (double time);
+    void Send (void);
+    int GetSize (void) const;
+    void SetStopFlow(bool flag);
+    bool GetStopFlow(void);
+    
+    
 private:
-  NetworkNode* m_device;
-  HoManager* m_hoManager;
-  double m_detachTime;
+    double m_interval;
+    int m_size;
+    bool m_stateON;
+    double m_stateDuration;
+    double m_endState;
+    double m_lastPacketCreationTime;
+    bool m_firstTimeFlag;
+    bool m_stopFlow;
+    
 };
-
-#endif /* HANDOVERENTITY_H_ */

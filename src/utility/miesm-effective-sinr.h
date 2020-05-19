@@ -133,7 +133,7 @@ GetMiesmEffectiveSinr (const vector <double> &sinrs)
   for (int modulationOrder=2; modulationOrder<7; modulationOrder+=2)
     {
       double estimated_effsinr = GetMiesmEffectiveSinr(sinrs, modulationOrder);
-      int estimated_cqi = amc->GetCQIFromSinr(estimated_effsinr);
+      int estimated_cqi = amc->GetCQIFromSinr(estimated_effsinr); //TODO: CHECK GD eventual error: in your code there was margin = 1, why?!
       int estimated_mcs = amc->GetMCSFromCQI(estimated_cqi);
       int estimated_modulation_order = amc->GetModulationOrderFromMCS(estimated_mcs);
       if(estimated_modulation_order == modulationOrder)

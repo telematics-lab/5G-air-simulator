@@ -20,10 +20,14 @@
  */
 
 #include "phy.h"
+#include "../device/GNodeB.h"
+#include<map>
+
 #ifndef INTERFERENCE_H_
 #define INTERFERENCE_H_
 
 class UserEquipment;
+class GNodeB;
 
 class Interference
 {
@@ -33,6 +37,9 @@ public:
 
   double ComputeInterference (UserEquipment *ue, bool MBSFNConstructiveInterference=false);
   double ComputeDopplerInterference (int speed, Phy::WaveformType type);
+    
+  map<UserEquipment*,double> ComputeUplinkInterference (UserEquipment *ue); //for uplink mimo
+  map<GNodeB*,double> ComputeDownlinkInterference (UserEquipment *ue, bool MBSFNConstructiveInterference=false); //for uplink mimo
 
 private:
   bool m_isLosType;

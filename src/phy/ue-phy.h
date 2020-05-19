@@ -28,6 +28,10 @@
 #include <vector>
 #include <armadillo>
 
+#include "../core/cartesianCoodrdinates/CartesianCoordinates.h"
+#include <fstream>
+using namespace std;
+
 class IdealControlMessage;
 class UserEquipment;
 
@@ -54,6 +58,12 @@ public:
   void SendReferenceSymbols (void);
   void SetTxSignalForReferenceSymbols (void);
   TransmittedSignal* GetTxSignalForReferenceSymbols (void);
+    
+  vector<int> GetMcsIndexForTx (void);
+  vector<int> GetChannelsForTx (void);
+  vector< shared_ptr<arma::cx_fmat> > GetPrecodingMatricesForRx();//for uplink mimo
+  vector<int> GetAssignedLayers();//for uplink mimo
+  vector<int> GetCqiForUlMimo();//for uplink mimo
 
 protected:
   vector<double> m_sinrForCQI;

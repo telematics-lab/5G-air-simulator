@@ -70,6 +70,8 @@ public:
 
   void SetHandoverEntity (HandoverEntity* h);
   HandoverEntity* GetHandoverEntity (void);
+  
+  void CopyRadioBearer (RadioBearer* bearer);
 
 private:
   RadioBearersContainer* m_bearers;

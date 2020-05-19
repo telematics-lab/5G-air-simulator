@@ -292,9 +292,8 @@ int const TbsL1ToL4Translation[2][142] =
   { 3112, 3240, 3368, 3496, 3624, 3752, 3880, 4008, 4136, 4264, 4392, 4584, 4584, 4776, 4968, 4968, 5160, 5352, 5352, 5544, 5736, 5992, 6200, 6456, 6712, 6968, 7224, 7480, 7736, 7992, 7992, 8248, 8504, 8760, 9144, 9528, 9528, 9912, 10296, 10296, 10680, 11064, 11064, 11448, 11832, 12576, 12960, 13536, 14112, 14688, 15264, 15264, 15840, 16416, 16992, 17568, 18336, 19080, 19848, 20616, 21384, 22152, 22920, 23688, 24496, 25456, 26416, 28336, 29296, 29296, 30576, 31704, 32856, 34008, 35160, 36696, 37888, 39232, 40576, 42368, 43816, 45352, 46888, 48936, 51024, 51024, 55056, 57336, 59256, 61664, 63776, 66592, 68808, 71112, 73712, 76208, 78704, 81176, 84760, 87936, 90816, 93800, 97896, 101840, 105528, 110136, 115040, 115040, 124464, 128496, 133208, 137792, 142248, 146856, 151376, 157432, 161760, 169544, 175600, 181656, 187712, 195816, 203704, 211936, 220296, 230104, 236160, 245648, 254328, 266440, 275376, 284608, 293736, 299856, 305976, 314888, 324336, 339112, 351224, 363336, 375448, 391656 }
 };
 
-AMCModule::AMCModule()
-{
-  setUseExtendedCQI (false);
+AMCModule::AMCModule() {
+  setUseExtendedCQI (true);
 }
 
 AMCModule::~AMCModule()
@@ -331,11 +330,12 @@ AMCModule::setUseExtendedCQI (bool t)
     }
 }
 
+//TODO:CHECK GD I modified directly this method with an optional parameter for the margin, without creating a new one
 int
-AMCModule::GetCQIFromSinr (double sinr)
+AMCModule::GetCQIFromSinr (double sinr, double margin)
 {
   int cqi = 1; // == CQIIndex[0]
-  while (SINRForCQIIndex[cqi] <= sinr && cqi <= 14)
+  while (SINRForCQIIndex[cqi] <= (sinr - margin) && cqi <= 14)
     {
       cqi++;
     }
@@ -529,14 +529,14 @@ int AMCModule::GetModulationOrderFromMCS(int mcs)
   return ModulationSchemeForMCSIndex[mcs];
 }
 
-
-int AMCModule::GetMCSFromSinrVector(const vector<double> &sinr)
+//TODO:CHECK GD I modified directly this method with an optional parameter for the margin, without creating a new one
+int AMCModule::GetMCSFromSinrVector(const vector<double> &sinr, double margin)
 {
   int mcs = 0;
   for (int modulationOrder=2; modulationOrder<7; modulationOrder+=2)
     {
       double estimated_effsinr = GetMiesmEffectiveSinr(sinr, modulationOrder);
-      int estimated_cqi = GetCQIFromSinr(estimated_effsinr);
+      int estimated_cqi = GetCQIFromSinr(estimated_effsinr, margin);
       int estimated_mcs = GetMCSFromCQI(estimated_cqi);
       int estimated_modulation_order = GetModulationOrderFromMCS(estimated_mcs);
       if(estimated_modulation_order == modulationOrder)
@@ -568,3 +568,5 @@ DEBUG_LOG_END
 
   return cqi;
 }
+
+

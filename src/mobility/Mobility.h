@@ -93,6 +93,10 @@ public:
   double
   GetTopologyBorder (void);
 
+  void
+  SetDoHandoverFlag (bool handover);
+  bool
+  GetDoHandoverFlag (void);
 
 private:
   NetworkNode* m_device;
@@ -106,6 +110,7 @@ private:
   double m_positionLastUpdate;  // s
   bool m_handover;              // true to enable hand over
   double m_handoverLastRun;     // s
+  bool m_doHandoverFlag;
 };
 
 #endif /* MOBILITY_H_ */

@@ -27,6 +27,7 @@
 #include "../radio-bearer.h"
 #include "../../device/GNodeB.h"
 #include "../../device/MulticastDestination.h"
+#include "../QoS/QoSParameters.h"
 
 #define MAXMTUSIZE 1490
 
@@ -180,10 +181,7 @@ TraceBased::Send (void)
           packet->SetID(uid);
           packet->SetTimeStamp (Simulator::Init()->Now ());
           packet->SetSize (MAXMTUSIZE);
-          if(GetDestination()->GetNodeState() == NetworkNode::STATE_ACTIVE)
-            {
           Trace (packet);
-            }
           PacketTAGs *tags = new PacketTAGs ();
           tags->SetApplicationType(PacketTAGs::APPLICATION_TYPE_TRACE_BASED);
           tags->SetFrameNumber(GetFrameCounter());
@@ -192,6 +190,10 @@ TraceBased::Send (void)
           tags->SetApplicationSize (packet->GetSize ());
           dataOfFrameAlreadySent+=MAXMTUSIZE;
           packet->SetPacketTags(tags);
+          
+          //for priority scheduling
+          double maxDelay = GetQoSParameters()->GetMaxDelay();
+          packet->SetRtts(maxDelay);
 
 
           UDPHeader *udp = new UDPHeader (GetClassifierParameters ()->GetSourcePort (),
@@ -231,10 +233,7 @@ TraceBased::Send (void)
           }
           else
           {
-            if(GetDestination()->GetNodeState() == NetworkNode::STATE_ACTIVE)
-            {
               Trace (packet);
-            }
           }
           PacketTAGs *tags = new PacketTAGs ();
           tags->SetApplicationType(PacketTAGs::APPLICATION_TYPE_TRACE_BASED);
@@ -244,6 +243,9 @@ TraceBased::Send (void)
           tags->SetApplicationSize (packet->GetSize ());
           dataOfFrameAlreadySent+=sizetosend;
           packet->SetPacketTags(tags);
+
+          //TODO: CHECK GD why this hardcoded value?
+          packet->SetRtts(0.5);
 
 
           UDPHeader *udp = new UDPHeader (GetClassifierParameters ()->GetSourcePort (),
@@ -256,9 +258,18 @@ TraceBased::Send (void)
 
           PDCPHeader *pdcp = new PDCPHeader ();
           packet->AddPDCPHeader (pdcp);
-          if(GetDestination()->GetNodeState() == NetworkNode::STATE_ACTIVE || GetDestination ()->GetNodeType() == NetworkNode::TYPE_MULTICAST_DESTINATION)
+            if(GetSource()->GetNodeType()==NetworkNode::TYPE_UE){
+                if(GetSource()->GetNodeState() == NetworkNode::STATE_ACTIVE)
+                {
+                    GetRadioBearer()->Enqueue (packet);
+                }
+            }
+            else
             {
-              GetRadioBearer()->Enqueue (packet);
+                if(GetDestination()->GetNodeState() == NetworkNode::STATE_ACTIVE || GetDestination ()->GetNodeType() == NetworkNode::TYPE_MULTICAST_DESTINATION)
+                {
+                    GetRadioBearer()->Enqueue (packet);
+                }
             }
         }
 

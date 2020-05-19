@@ -80,38 +80,48 @@ UePhy::UePhy()
     }
 }
 
-UePhy::~UePhy()
-{
-  Destroy ();
+UePhy::~UePhy() {
+    m_sinrForCQI.clear();
+    Destroy ();
 }
 
+//TODO: CHECK GD i slightly modified it, check if it works
 void
-UePhy::DoSetBandwidthManager (void)
-{
-  TransmittedSignal* txSignal = new TransmittedSignal ();
-
-  vector< vector<double> > values;
-  values.resize(1);
-  for (auto channel : GetBandwidthManager ()->GetUlSubChannels ())
-    {
-      values.at(0).push_back(0);
-    }
-
-  if (m_channelsForTx.size () > 0)
-    {
-      double totPower = pow (10., (GetTxPower () - 30) / 10); // in natural unit
-      double txPower = 10 * log10 (totPower / m_channelsForTx.size ()); //in dB
-      for (auto channel : m_channelsForTx)
-        {
-          values.at(0).at (channel) = txPower;
+UePhy::DoSetBandwidthManager (void) {
+    
+    TransmittedSignal* txSignal = new TransmittedSignal ();
+    vector< vector<double> > values;
+    BandwidthManager* s = GetBandwidthManager ();
+    vector<double> channels = s->GetUlSubChannels ();
+    
+    if (m_channelsForTx.size () > 0) {
+        double totPower = pow (10., (GetTxPower () - 30) / 10); // in natural unit
+        double txPower = 10 * log10 (totPower / m_channelsForTx.size ()); //in dB
+        
+        if(GetDevice()->GetTargetNode()->GetMacEntity()->GetDefaultUlTxMode() == 11){
+            values.resize(GetTxAntennas());
+            
+            for(int i=0; i<GetTxAntennas(); i++)//for uplink mimo
+                for (auto channel : channels)
+                    values.at(i).push_back(txPower);//for uplink mimo
+        }
+        
+        else {
+            values.resize(1);
+            
+            for (auto channel : m_channelsForTx)
+                values.at(0).at (channel) = txPower;
         }
     }
-  txSignal->SetValues (values);
-  if (GetTxSignal() != NULL)
-    {
-      delete GetTxSignal();
-    }
-  SetTxSignal (txSignal);
+    
+    txSignal->SetValues (values);
+    
+    if (GetTxSignal() != NULL)
+        delete GetTxSignal();
+    
+    SetTxSignal (txSignal);
+    channels.clear();
+    values.clear();
 }
 
 void
@@ -157,7 +167,7 @@ DEBUG_LOG_END
     }
 
   double noise_interference = 10. * log10 (pow(10., GetThermalNoise()/10) + interference); // dB
-  int txMode = ue->GetTargetNodeRecord()->GetDlTxMode();
+  int txMode = ue->GetTargetNode()->GetMacEntity()->GetDefaultDlTxMode(); //TODO: CHECK GD why?
   if (ue->GetMulticastDestination()!=nullptr)
     {
       if ( (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
@@ -934,6 +944,28 @@ if (m_assignedLayers.size()==0)
               int speed = GetDevice()->GetMobilityModel()->GetSpeed();
               WaveformType waveform = ue->GetTargetNode()->GetPhy()->GetWaveformType();
               double dopplerSIR = GetInterference()->ComputeDopplerInterference(speed,waveform);
+                
+                //TODO: CHECK GD i moved the new code in case 11 only, where it shoukd be, let's discuss interference together when you complete the other TODOS (leave this one)
+                double noise_interf = 0;
+                double Interference = 0;
+                map<GNodeB*,double> interf;
+                if (GetInterference () != nullptr)
+                    interf = GetInterference()->ComputeDownlinkInterference(ue);
+                
+                vector<int> rbsEnbPhy = GetDevice()->GetTargetNode()->GetAllocatedDlRBs();
+                
+                std::map<GNodeB*,double>::iterator it = interf.begin();
+                for(it=interf.begin(); it!=interf.end(); it++) {
+                    vector<int> rbs = it->first->GetAllocatedDlRBs();
+                    if(find(rbs.begin(),rbs.end(), i)!=rbs.end()&&find(rbsEnbPhy.begin(),rbsEnbPhy.end(), i)!=rbsEnbPhy.end()) {
+                        Interference+=it->second;
+                    }
+                    else {
+                        //Interference+=0;
+                    }
+                }
+                noise_interf = 10. * log10 (pow(10., GetThermalNoise()/10) + Interference);
+                rbsEnbPhy.clear();
 
               if (use_srta_pi==true)
                 {
@@ -951,19 +983,19 @@ if (m_assignedLayers.size()==0)
 //                  sinrs = SinrCalculator::MimoReceptionMRC(
                                                 receivedSignalLevels,
                                                 precoding,
-                                                noise_interference,
+                                                noise_interf,
                                                 m_assignedLayers,
                                                 dopplerSIR);
                 }
               double effsinr = GetMiesmEffectiveSinr( sinrs );
               measuredSinr.at(i) = effsinr;
+              Interference = 0;
 
               // use simple formula for the CQI. the base station needs to adjust it to include MU-MIMO interference
 
-              m_sinrForCQI.push_back((10*log10(avgPower)-noise_interference));
-//              m_sinrForCQI.push_back((10*log10(avgPower)-noise_interference)/2);
-//              m_sinrForCQI.push_back(effsinr);
+              m_sinrForCQI.push_back((10*log10(avgPower)-noise_interf));
             }
+
 
 DEBUG_LOG_START_1(SIM_ENV_MCS_DEBUG)
           cout << "MCS_DEBUG UE " << GetDevice()->GetIDNetworkNode() << ", SINR for CQI " << m_sinrForCQI << endl;
@@ -1339,4 +1371,22 @@ UePhy::SendReferenceSymbols (void)
     }
 }
 
+vector< shared_ptr<arma::cx_fmat> >
+UePhy::GetPrecodingMatricesForRx() {
+    return m_precodingMatricesForRx;
+}
 
+vector<int>
+UePhy::GetAssignedLayers() {
+    return m_assignedLayers;
+}
+
+vector<int>
+UePhy::GetMcsIndexForTx (void) {
+    return m_mcsIndexForTx;
+}
+
+vector<int>
+UePhy::GetChannelsForTx (void) {
+    return m_channelsForTx;
+}

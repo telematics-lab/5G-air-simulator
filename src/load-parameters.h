@@ -82,11 +82,13 @@ static bool _channel_AWGN_ = true;
 static bool _harq_active_  = false;
 
 /* channel realization type */
-#define _channel_simple_
-//#define _channel_advanced_
+//#define _channel_simple_
+#define _channel_advanced_
 
 /* debugging */
 #define PHYRX_DEBUG
+
+//#define BEAMFORMING_GAIN_SHAPE
 
 #endif /* PARAMETERS_H_ */
 

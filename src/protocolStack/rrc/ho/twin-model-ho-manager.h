@@ -16,44 +16,37 @@
  * You should have received a copy of the GNU General Public License
  * along with 5G-air-simulator; if not, see <http://www.gnu.org/licenses/>.
  *
- * Author: Telematics Lab <telematics-dev@poliba.it>
- * Author: Alessandro Grassi <alessandro.grassi@poliba.it>
+ * Author: Gabriele Roncella <gabriele.roncella@student.unisi.it>
+ * Author: Dinesh Tamang <dinesh.tamang@student.unisi.it>
  */
 
+#include "ho-manager.h"
+#ifndef twin_model_ho_manager_h
+#define twin_model_ho_manager_h
 
-#ifndef HOMANAGER_H_
-#define HOMANAGER_H_
 
-class UserEquipment;
-class GNodeB;
 
-class HoManager
+class TwinModelHoManager: public HoManager
 {
 public:
-    HoManager() = default;
-    virtual ~HoManager() = default;
+    TwinModelHoManager();
+    virtual ~TwinModelHoManager() = default;
     
-    virtual bool CheckHandoverNeed (UserEquipment* ue) = 0;
-    //TODO: CHECK GD are you sure these go in this class?
-    virtual bool CheckDetachTimeForTwin(UserEquipment* twin)=0;
-    virtual void CalculatePower(UserEquipment* ue)=0;
+    virtual bool CheckHandoverNeed (UserEquipment* ue);
+    virtual bool CheckDetachTimeForTwin (UserEquipment * twin);
+    virtual void CalculatePower(UserEquipment* ue);
     
-    //for twin model
     void SetHandoverThresholdBefore(double thresholdBefore);
     void SetHandoverThresholdAfter(double thresholdAfter);
     double GetHandoverThresholdBefore(void);
     double GetHandoverThresholdAfter(void);
     
-    GNodeB* m_target;
     
-    void SetHandoverMargin(double margin);
-    double GetHandoverMargin(void);
 private:
-    double m_handoverMargin;
-    
     double m_handoverThresholdBefore;
     double m_handoverThresholdAfter;
-
 };
 
-#endif /* HOMANAGER_H_ */
+#endif /* twin_model_ho_manager_h */
+
+

@@ -34,3 +34,30 @@ HoManager::GetHandoverMargin(void)
 {
   return m_handoverMargin;
 }
+
+
+//TODO: CHECK GD are you sure these go in this class?
+//for twin
+void
+HoManager::SetHandoverThresholdBefore(double thresholdBefore)
+{
+    m_handoverThresholdBefore = thresholdBefore;
+}
+
+double
+HoManager::GetHandoverThresholdBefore(void)
+{
+    return m_handoverThresholdBefore;
+}
+
+void
+HoManager::SetHandoverThresholdAfter(double thresholdAfter)
+{
+    m_handoverThresholdAfter = thresholdAfter;
+}
+
+double
+HoManager::GetHandoverThresholdAfter(void)
+{
+    return m_handoverThresholdAfter;
+}

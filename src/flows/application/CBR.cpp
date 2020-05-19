@@ -25,6 +25,10 @@
 #include <cstdlib>
 #include "../../componentManagers/NetworkManager.h"
 #include "../radio-bearer.h"
+#include "../QoS/QoSParameters.h"
+#include "../../device/NetworkNode.h"
+#include "../../device/UserEquipment.h"
+
 
 CBR::CBR()
 {
@@ -42,18 +46,28 @@ CBR::DoStop (void)
 {
 }
 
+//TODO: CHECK GD i don't get the point of this... in addition an if over the handover model should be done
 void
 CBR::ScheduleTransmit (double time)
 {
-  if ( (Simulator::Init()->Now () + time) < GetStopTime () )
-    {
-      Simulator::Init()->Schedule(time, &CBR::Send, this);
+    if ( (Simulator::Init()->Now () + time) < GetStopTime () )
+        Simulator::Init()->Schedule(time, &CBR::Send, this);
+    else {
+        UserEquipment* ue;
+        NetworkNode* src = GetSource ();
+        
+        if(src->GetNodeType()==NetworkNode::TYPE_UE)
+            ue = (UserEquipment*) GetSource();
+        else if (src->GetNodeType () == NetworkNode::TYPE_GNODEB)
+            ue = (UserEquipment*) GetDestination();
+        UserEquipment* twin = NetworkManager::Init()->GetTwinUserEquipmentByID(ue->GetIDNetworkNode());
+        NetworkManager::Init()->StopTwin(twin);
+        
     }
 }
 
 void
-CBR::Send (void)
-{
+CBR::Send (void) {
   //CREATE A NEW PACKET (ADDING UDP, IP and PDCP HEADERS)
   Packet *packet = new Packet ();
   int uid = Simulator::Init()->GetUID ();
@@ -66,6 +80,8 @@ CBR::Send (void)
   tags->SetApplicationType(PacketTAGs::APPLICATION_TYPE_CBR);
   tags->SetApplicationSize (packet->GetSize ());
   packet->SetPacketTags(tags);
+    
+  packet->SetRtts( GetQoSParameters()->GetMaxDelay()); //for priority scheduling
 
 
   UDPHeader *udp = new UDPHeader (GetClassifierParameters ()->GetSourcePort (),
@@ -78,12 +94,30 @@ CBR::Send (void)
 
   PDCPHeader *pdcp = new PDCPHeader ();
   packet->AddPDCPHeader (pdcp);
-
+  
   Trace (packet);
 
   GetRadioBearer()->Enqueue (packet);
+    //TODO: CHECK GD why this comment?
+  Application::SetLastPacketCreationTime(Simulator::Init()->Now());
 
-  ScheduleTransmit (GetInterval ());
+    /*if(GetSource()->GetNodeType()==NetworkNode::TYPE_UE)
+    {
+        if(GetSource()->GetNodeState() == NetworkNode::STATE_ACTIVE||GetSource()->GetNodeState()== NetworkNode::STATE_IDLE)
+        {
+            GetRadioBearer()->Enqueue (packet);
+        }
+    }
+    else
+    {
+        if(GetDestination()->GetNodeState() == NetworkNode::STATE_ACTIVE)
+        {
+            GetRadioBearer()->Enqueue (packet);
+        }
+
+    }*/
+    ScheduleTransmit (GetInterval ());
+    Application::SetInterval(m_interval);
 
 }
 

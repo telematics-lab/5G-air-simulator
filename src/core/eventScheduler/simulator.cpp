@@ -135,3 +135,8 @@ Simulator::PrintMemoryUsage (void)
 {
   system("pmap `ps aux | grep 5G  | grep -v grep | awk '{print $2}'` | grep total");
 }
+
+bool
+Simulator::GetStop(void) {
+    return m_stop;
+}

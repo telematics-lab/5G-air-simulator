@@ -47,6 +47,14 @@
 #include "../utility/IndoorScenarios.h"
 #include "../networkTopology/Street.h"
 #include "FrameManager.h"
+#include "FlowsManager.h"
+#include "../protocolStack/rlc/am-rlc-entity.h"
+#include "../phy/wideband-cqi-eesm-error-model.h"
+#include "../phy/ue-phy.h"
+#include "../protocolStack/mac/AMCModule.h"
+#include "../flows/MacQueue.h"
+#include "../phy/wideband-cqi-eesm-error-model.h"
+
 
 NetworkManager* NetworkManager::ptr=nullptr;
 
@@ -139,6 +147,7 @@ NetworkManager::CreateUserEquipment (int id,
                                      double pos_X, double pos_Y, double speed, double speedDirection, int numTxAntennas, int numRxAntennas,
                                      Cell* cell, GNodeB* gnb)
 {
+  //TODO:CHECK GD you modified this instruction in your code... is it necessary?!
   UserEquipment* ue = new UserEquipment (id,
                                          pos_X, pos_Y, speed, speedDirection,
                                          cell, gnb,
@@ -674,7 +683,7 @@ DEBUG_LOG_START_2(SIM_ENV_HANDOVER_DEBUG,SIM_ENV_HANDOVER_TARGET_DEBUG)
             << " to gNB " << newTarget->GetIDNetworkNode() << endl;
 DEBUG_LOG_END
 
-  // 1 - deactivate the UE for a time equal to 30 ms
+  // 1 - deactivate the UE for a time equal to detachTime ms
   bool detach = false;
   if (ue->GetNodeState() == UserEquipment::STATE_ACTIVE||
       ue->GetNodeState() == UserEquipment::STATE_IDLE)
@@ -691,7 +700,8 @@ DEBUG_LOG_START_1(SIM_ENV_MOBILITY_DEBUG)
 DEBUG_LOG_END
 
   // 2 - transfer all active radio bearer
-  Simulator::Init()->Schedule(0.001,
+  //TODO: CHECK GD why?
+  Simulator::Init()->Schedule(0.002,
                               &NetworkManager::TransferBearerInfo,
                               this,
                               ue,
@@ -699,8 +709,19 @@ DEBUG_LOG_END
 
   if (detach == true)
     {
-      double detachTime = ue->GetProtocolStack()->GetRrcEntity()->GetHandoverEntity()->GetDetachTime();
+      double detachTime = ue->GetTargetNode()->GetProtocolStack()->GetRrcEntity()->GetHandoverEntity()->GetDetachTime();
       Simulator::Init()->Schedule(detachTime, &NetworkNode::MakeActive, ue);
+        if(ue->hasTwin())
+        {
+            UserEquipment* twin = NetworkManager::Init()->GetTwinUserEquipmentByID(ue->GetIDNetworkNode());
+
+            // reset all the flags
+
+            Simulator::Init()->Schedule(detachTime, &UserEquipment::SetTwinTransmittingFlag, ue, true);
+            Simulator::Init()->Schedule(detachTime, &UserEquipment::SetNodeState, twin, NetworkNode::STATE_IDLE);
+
+
+        }
     }
 
   ue->GetMobilityModel ()->SetLastHandoverTime(time);
@@ -726,7 +747,10 @@ DEBUG_LOG_END
 DEBUG_LOG_START_1(SIM_ENV_HANDOVER_DEBUG)
       cout << "update spectrum, channels and propagation loss model"<< endl;
 DEBUG_LOG_END
-      ue->GetPhy ()->SetBandwidthManager (newTargetNode->GetPhy ()->GetBandwidthManager ());
+      
+      //TODO: CHECK GD are you sure? why?
+      if(!UPLINK)
+          ue->GetPhy ()->SetBandwidthManager (newTargetNode->GetPhy ()->GetBandwidthManager ());
 
       RadioChannel *oldDl, *oldUl, *oldMcDl, *newDl, *newUl, *newMcDl;
 
@@ -755,7 +779,8 @@ DEBUG_LOG_END
               newDl->GetPropagationLossModel ()->GetChannelRealization(newTargetNode, ue)->enableFastFading();
               if (oldDl->GetPropagationLossModel ()->GetChannelRealization (oldTargetNode,ue) != nullptr)
                 {
-                  oldDl->GetPropagationLossModel ()->GetChannelRealization (oldTargetNode,ue)->disableFastFading();
+                  //TODO: CHECK GD why?
+                    // oldDl->GetPropagationLossModel ()->GetChannelRealization (oldTargetNode,ue)->disableFastFading();
                 }
             }
         }
@@ -781,14 +806,19 @@ DEBUG_LOG_END
       if (newUl != nullptr && oldUl != nullptr)
         {
           ue->GetPhy ()->SetUlChannel (newUl);
-          if (oldUl->IsAttached (ue))
-            {
-              newUl->AddDevice (ue);
-              oldUl->DelDevice (ue);
-            }
+            //TODO: CHECK GD I DON'T UNDERSTAND THESE MODIFICATIONS!
+          if(!newUl->IsAttached(newTargetNode))
+              newUl->AddDevice(newTargetNode);
+//
+//          if (oldUl->IsAttached (ue))
+//            {
+//              newUl->AddDevice (ue);
+//              oldUl->DelDevice (ue);
+//            }
           if (newUl->GetPropagationLossModel () != nullptr && UPLINK)
             {
-              if(newUl->GetPropagationLossModel ()->GetChannelRealization(newTargetNode,ue) == nullptr)
+                // TODO: CHECK GD why did you switch arguments?
+              if(newUl->GetPropagationLossModel ()->GetChannelRealization(ue, newTargetNode) == nullptr)
                 {
                   newUl->GetPropagationLossModel ()->AddChannelRealization (CreateChannelRealization (ue, newTargetNode));
 
@@ -797,7 +827,8 @@ DEBUG_LOG_END
               newUl->GetPropagationLossModel ()->GetChannelRealization(ue, newTargetNode)->enableFastFading();
               if (oldUl->GetPropagationLossModel ()->GetChannelRealization (ue, oldTargetNode) != nullptr)
                 {
-                  oldUl->GetPropagationLossModel ()->GetChannelRealization (ue, oldTargetNode)->disableFastFading();
+                    // TODO: CHECK GD why?
+                  //oldUl->GetPropagationLossModel ()->GetChannelRealization (ue, oldTargetNode)->disableFastFading();
                 }
             }
         }
@@ -1023,3 +1054,797 @@ NetworkManager::PrintUserPosition (void)
   cout << endl;
 }
 
+UserEquipment*
+NetworkManager::GetTwinUserEquipmentByID(int idUE)
+{
+    if(idUE%100==0)  //if this is a twin, return original node
+    {
+        for(auto userEquipment: *GetUserEquipmentContainer())
+        {
+            if((userEquipment->GetIDNetworkNode())*100==idUE)
+            {
+                return userEquipment;
+            }
+        }
+    }
+    else   // if this is a original node, return twin node
+    {
+        for(auto userEquipment: *GetUserEquipmentContainer())
+        {
+            if((userEquipment->GetIDNetworkNode())/100==idUE)
+            {
+                return userEquipment;
+            }
+        }
+    }
+    
+    return nullptr;
+}
+
+void
+NetworkManager::DualTransmission(UserEquipment* ue, GNodeB* newTarget) {
+    // continue transmitting with UE
+    UserEquipment* twin = NetworkManager::Init()->GetTwinUserEquipmentByID(ue->GetIDNetworkNode());
+    Simulator::Init()->Schedule(0.008,&NetworkManager::StartTwin,this, twin, newTarget);
+}
+
+void
+NetworkManager::StartTwin (UserEquipment* twin, GNodeB* target)
+{
+    // the flow in the original node is finished or not. if its finished. dont start twin. else start twin
+    
+    
+    // if the acive flows exist do the following, else do nothing
+    // find the number of active downlink flows for ue
+    
+    // connect the Twin With the TargetNode
+    //1 - update spectrum, channels and propagation loss model for twin
+    // 2 - add twin record to the new Enb
+    //3 - delete twin record form the old enb
+    // 4 - update cell and new target enb for the twin
+    //5 - create the flows for twin for active flows in ue
+    
+    
+    UserEquipment* ue = NetworkManager::Init()->GetTwinUserEquipmentByID(twin->GetIDNetworkNode());
+    
+    if ( (target->GetNodeType() == NetworkNode::TYPE_GNODEB && ue->GetTargetNode ()->GetNodeType() == NetworkNode::TYPE_GNODEB) ||
+        (target->GetNodeType() == NetworkNode::TYPE_HOME_BASE_STATION && ue->GetTargetNode ()->GetNodeType() == NetworkNode::TYPE_GNODEB) ||
+        (target->GetNodeType() == NetworkNode::TYPE_GNODEB && ue->GetTargetNode ()->GetNodeType() == NetworkNode::TYPE_HOME_BASE_STATION))
+    {
+        GNodeB *oldTargetNodeForTwin = twin->GetTargetNode (); ///old target node of the twin
+        GNodeB *newTargetNodeForTwin = target;  /// new target for twin
+        GNodeB *ueTargetNode = ue->GetTargetNode();
+        
+        RrcEntity * oldEnbRrc = ueTargetNode->GetProtocolStack ()->GetRrcEntity ();
+        RrcEntity * newEnbRrc = newTargetNodeForTwin->GetProtocolStack ()->GetRrcEntity ();
+        RrcEntity * twinRrc = twin->GetProtocolStack  ()->GetRrcEntity ();
+        RrcEntity * ueRrc = ue->GetProtocolStack()->GetRrcEntity();
+        
+        
+        // find the active of downlink flows  for ue
+        vector<RadioBearer*> *dlBearer = new vector<RadioBearer*>();
+        vector<RadioBearer*> *ulBearer = new vector<RadioBearer*>();
+        
+        vector<double> dlTxTimes;
+        vector<double> ulTxTimes;
+        
+        int dlBearerCounter =0;
+        int ulBearerCounter =0;
+        
+        
+        ////find the active of downlink flows  for ue
+        for (auto bearer : *oldEnbRrc->GetRadioBearerContainer ())
+        {
+            if (bearer->GetDestination ()->GetIDNetworkNode () == ue->GetIDNetworkNode ())
+            {
+                if((bearer->GetApplication()->GetLastPacketCreationTime())< (bearer->GetApplication()->GetStopTime()))
+                {
+                    dlBearer->push_back(bearer);
+                    dlBearerCounter++;
+                    
+                }
+                
+            }
+        }
+        
+        
+        
+        ////find the active of uplink flows  for ue
+        for (auto bearer : *ueRrc->GetRadioBearerContainer ())
+        {
+            if (bearer->GetDestination()->GetIDNetworkNode () == ue->GetTargetNode()->GetIDNetworkNode ())
+            {
+                if((bearer->GetApplication()->GetLastPacketCreationTime())<(bearer->GetApplication()->GetStopTime()))
+                    
+                {
+                    ulBearer->push_back(bearer);
+                    ulBearerCounter++;
+                    
+                }
+                
+            }
+        }
+        
+        
+        if(dlBearerCounter>0||ulBearerCounter>0 )
+        {
+            
+            // 1 - update spectrum, channels and propagation loss model for twin
+            //twin->GetPhy ()->SetBandwidthManager (newTargetNodeForTwin->GetPhy ()->GetBandwidthManager ());
+            
+            RadioChannel *newDl, *newUl, *oldDl, *oldUl;
+            
+            oldDl = oldTargetNodeForTwin->GetPhy()->GetDlChannel();
+            newDl = newTargetNodeForTwin->GetPhy ()->GetDlChannel ();
+            
+            oldUl= oldTargetNodeForTwin->GetPhy()->GetUlChannel();
+            
+            newUl = newTargetNodeForTwin->GetPhy ()->GetUlChannel ();
+            
+            
+            if (newDl != nullptr && oldDl != nullptr)
+            {
+                twin->GetPhy ()->SetDlChannel (newDl);
+                if (oldDl->IsAttached (twin))
+                {
+                    newDl->AddDevice (twin);
+                    oldDl->DelDevice (twin);
+                }
+                if (newDl->GetPropagationLossModel () != nullptr)
+                {
+                    if(newDl->GetPropagationLossModel ()->GetChannelRealization(newTargetNodeForTwin,twin) == nullptr)
+                    {
+                        newDl->GetPropagationLossModel ()->AddChannelRealization (CreateChannelRealization (newTargetNodeForTwin, twin));
+                        oldDl->GetPropagationLossModel ()->DelChannelRealization (oldTargetNodeForTwin,twin);
+                    }
+                    newDl->GetPropagationLossModel ()->GetChannelRealization(newTargetNodeForTwin, twin)->enableFastFading();
+                    if (oldDl->GetPropagationLossModel ()->GetChannelRealization (oldTargetNodeForTwin,twin) != nullptr)
+                    {
+                        //oldDl->GetPropagationLossModel ()->GetChannelRealization (oldTargetNodeForTwin,twin)->disableFastFading();
+                    }
+                }
+            }
+            
+            
+            
+            if (newUl != nullptr && oldUl != nullptr)
+            {
+                twin->GetPhy ()->SetUlChannel (newUl);
+                
+                if(!newUl->IsAttached(newTargetNodeForTwin))
+                {
+                    newUl->AddDevice(newTargetNodeForTwin);
+                }
+                //oldUl->DelDevice(newTargetNodeForTwin);
+                
+                
+                
+                
+                //    newUl->AddDevice(newTargetNodeForTwin);
+                /*if (oldUl->IsAttached (oldTargetNodeForTwin))
+                 {
+                 newUl->AddDevice (newTargetNodeForTwin);
+                 oldUl->DelDevice (oldTargetNodeForTwin);
+                 }*/
+                if (newUl->GetPropagationLossModel () != nullptr)
+                {
+                    if(newUl->GetPropagationLossModel ()->GetChannelRealization(twin,newTargetNodeForTwin) == nullptr)
+                    {
+                        newUl->GetPropagationLossModel ()->AddChannelRealization (CreateChannelRealization (twin, newTargetNodeForTwin));
+                        
+                        oldUl->GetPropagationLossModel ()->DelChannelRealization (twin,oldTargetNodeForTwin);
+                    }
+                    newUl->GetPropagationLossModel ()->GetChannelRealization(twin, newTargetNodeForTwin)->enableFastFading();
+                    if (oldUl->GetPropagationLossModel ()->GetChannelRealization (twin, oldTargetNodeForTwin) != nullptr)
+                    {
+                        //oldUl->GetPropagationLossModel ()->GetChannelRealization (twin, oldTargetNodeForTwin)->disableFastFading();
+                    }
+                }
+            }
+            
+            
+            
+            DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+            cout << "Handover Triggered at Time: "<< Simulator::Init()->Now()<< endl;
+            cout << "Update spectrum and channels for twin  "<< Simulator::Init()->Now()<< endl;
+            DEBUG_LOG_END
+            
+            
+            // 2 - add twin record to the new Enb
+            // 3 - delete twin record form the old enb
+            
+            oldTargetNodeForTwin->DeleteUserEquipment (twin);
+            
+            newTargetNodeForTwin->RegisterUserEquipment (twin);
+            
+            DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+            cout << "Twin User :"<< twin->GetIDNetworkNode()<<" registerd at newTargetNode: "<<newTargetNodeForTwin->GetIDNetworkNode()<< endl;
+            DEBUG_LOG_END
+            
+            
+            
+            DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+            cout << "Twin User :"<< twin->GetIDNetworkNode()<<" deleted from  oldTargetNode: "<<oldTargetNodeForTwin->GetIDNetworkNode()<< endl;
+            DEBUG_LOG_END
+            
+            // 4 - update cell and new target enb for the twin
+            twin->SetTargetNode (newTargetNodeForTwin);
+            
+            DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+            cout << "newTargetNode "<< newTargetNodeForTwin->GetIDNetworkNode()<<" is set for twin User: "<<twin->GetIDNetworkNode()<< endl;
+            DEBUG_LOG_END
+            
+            DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+            cout << " Total Number of dl Flows to Start for Twin: "<< dlBearerCounter<< endl;
+            cout << " Total Number of ul Flows to Start for Twin: "<< ulBearerCounter<< endl;
+            
+            DEBUG_LOG_END
+            
+            for(int j=0;j<dlBearerCounter;j++)
+            {
+                if(dlBearer->at(j)->GetApplication()->GetApplicationType()==Application::APPLICATION_TYPE_VOIP)
+                {
+                    double interval= dlBearer->at(j)->GetApplication()->GetInterval();
+                    double stateduration = dlBearer->at(j)->GetApplication()->GetStateDuration();
+                    bool state = dlBearer->at(j)->GetApplication()->GetState();
+                    double endstate= dlBearer->at(j)->GetApplication()->GetEndState();
+                    double lastpkttime = dlBearer->at(j)->GetApplication()->GetLastPacketCreationTime();
+                    if(state==true)
+                    {
+                        Application* be = FlowsManager::Init()->
+                        CreateApplication(                                          (dlBearer->at(j)->GetApplication()->GetApplicationID())+100,
+                                          newTargetNodeForTwin,
+                                          twin, 0,
+                                          dlBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100,
+                                          TransportProtocol::TRANSPORT_PROTOCOL_TYPE_UDP,
+                                          Application::APPLICATION_TYPE_TWIN_VOIP,
+                                          dlBearer->at(j)->GetQoSParameters(),
+                                          state, stateduration, endstate, lastpkttime);
+                        
+                        double interval2=interval+lastpkttime;
+                        double txtime = interval2-Simulator::Init()->Now();
+                        dlTxTimes.push_back(txtime);
+                        be->SetStartTime(txtime);
+                        be->SetStopTime(dlBearer->at(j)->GetApplication()->GetStopTime());
+                        
+                        DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+                        cout << " Flow no:  "<< dlBearerCounter<<" start time: "<<Simulator::Init()->Now()+txtime<< endl;
+                        cout <<" Application ID: "<<dlBearer->at(j)->GetApplication()->GetApplicationID()+100<< endl;
+                        cout <<" Source Port: 0"<< endl;
+                        cout <<" Destination Port: "<<dlBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100<< endl;
+                        
+                        DEBUG_LOG_END
+                        
+                        
+                        
+                    }
+                    else
+                    {
+                        Application* be = FlowsManager::Init()->CreateApplication((dlBearer->at(j)->GetApplication()->GetApplicationID())+100,newTargetNodeForTwin,
+                                                                                  twin,0,dlBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100,TransportProtocol::TRANSPORT_PROTOCOL_TYPE_UDP,
+                                                                                  Application::APPLICATION_TYPE_TWIN_VOIP,dlBearer->at(j)->GetQoSParameters(),state, stateduration, endstate, lastpkttime);
+                        
+                        double interval2=stateduration+lastpkttime;
+                        double txtime = interval2-Simulator::Init()->Now();
+                        dlTxTimes.push_back(txtime);  //txtime
+                        be->SetStartTime(txtime);
+                        be->SetStopTime(dlBearer->at(j)->GetApplication()->GetStopTime());
+                        
+                        
+                        DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+                        cout << " Flow no:  "<< dlBearerCounter<<" start time: "<<Simulator::Init()->Now()+txtime<<" End time: "<<Simulator::Init()->Now()+txtime+0.030<< endl;
+                        cout <<" Application ID: "<<dlBearer->at(j)->GetApplication()->GetApplicationID()+100<< endl;
+                        cout <<" Source Port: 0"<< endl;
+                        cout <<" Destination Port: "<<dlBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100<< endl;
+                        
+                        DEBUG_LOG_END
+                        
+                    }
+                    
+                }
+                if(dlBearer->at(j)->GetApplication()->GetApplicationType()==Application::APPLICATION_TYPE_CBR)
+                {
+                    double interval= dlBearer->at(j)->GetApplication()->GetInterval();
+                    double lastpkttime = dlBearer->at(j)->GetApplication()->GetLastPacketCreationTime();
+                    
+                    double interval2=interval+lastpkttime;
+                    double txtime = interval2-Simulator::Init()->Now();
+                    dlTxTimes.push_back(txtime);
+                    
+                    if(txtime<0)
+                        break;
+                    
+                    Application* be = FlowsManager::Init()->CreateApplication((dlBearer->at(j)->GetApplication()->GetApplicationID())+100,newTargetNodeForTwin,
+                                                                              twin,0,dlBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100,TransportProtocol::TRANSPORT_PROTOCOL_TYPE_UDP,
+                                                                              Application::APPLICATION_TYPE_TWIN_CBR,dlBearer->at(j)->GetQoSParameters(),lastpkttime);
+                    
+                    be->SetInterval(interval);
+                    be->SetStartTime(txtime);
+                    be->SetStopTime(dlBearer->at(j)->GetApplication()->GetStopTime());
+                    
+                    DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+                    cout << " Flow no:  "<< dlBearerCounter<<" start time: "<<Simulator::Init()->Now()+txtime<< endl;
+                    cout <<" Application ID: "<<dlBearer->at(j)->GetApplication()->GetApplicationID()+100<< endl;
+                    cout <<" Source Port: 0"<< endl;
+                    cout <<" Destination Port: "<<dlBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100<< endl;
+                    
+                    DEBUG_LOG_END
+                    
+                    
+                    
+                }
+                
+                
+                
+            }
+            
+            for(int j=0;j<ulBearerCounter;j++)
+            {
+                if(ulBearer->at(j)->GetApplication()->GetApplicationType()==Application::APPLICATION_TYPE_VOIP)
+                {
+                    double interval= ulBearer->at(j)->GetApplication()->GetInterval();
+                    double stateduration = ulBearer->at(j)->GetApplication()->GetStateDuration();
+                    bool state = ulBearer->at(j)->GetApplication()->GetState();
+                    double endstate= ulBearer->at(j)->GetApplication()->GetEndState();
+                    double lastpkttime = ulBearer->at(j)->GetApplication()->GetLastPacketCreationTime();
+                    if(state==true)
+                    {
+                        
+                        Application* be = FlowsManager::Init()->CreateApplication((ulBearer->at(j)->GetApplication()->GetApplicationID())+100,twin,
+                                                                                  newTargetNodeForTwin,ulBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100,0,TransportProtocol::TRANSPORT_PROTOCOL_TYPE_UDP,
+                                                                                  Application::APPLICATION_TYPE_TWIN_VOIP,ulBearer->at(j)->GetQoSParameters(),state, stateduration, endstate, lastpkttime);
+                        
+                        double interval2=interval+lastpkttime;
+                        double txtime = interval2-Simulator::Init()->Now();
+                        ulTxTimes.push_back(txtime);
+                        be->SetStartTime(txtime);
+                        be->SetStopTime(dlBearer->at(j)->GetApplication()->GetStopTime());
+                        
+                        DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+                        cout << " Flow no:  "<< ulBearerCounter<<" start time: "<<Simulator::Init()->Now()+txtime<< endl;
+                        cout <<" Application ID: "<<ulBearer->at(j)->GetApplication()->GetApplicationID()+100<< endl;
+                        cout <<" Source Port: 0"<< endl;
+                        cout <<" Destination Port: "<<ulBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100<< endl;
+                        
+                        DEBUG_LOG_END
+                        
+                    }
+                    else
+                    {
+                        Application* be = FlowsManager::Init()->CreateApplication((ulBearer->at(j)->GetApplication()->GetApplicationID())+100,twin,newTargetNodeForTwin
+                                                                                  ,ulBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100,0,TransportProtocol::TRANSPORT_PROTOCOL_TYPE_UDP,
+                                                                                  Application::APPLICATION_TYPE_TWIN_VOIP,ulBearer->at(j)->GetQoSParameters(),state, stateduration, endstate, lastpkttime);
+                        
+                        double interval2=stateduration+lastpkttime;
+                        double txtime = interval2-Simulator::Init()->Now();
+                        ulTxTimes.push_back(txtime);
+                        be->SetStartTime(txtime);
+                        be->SetStopTime(ulBearer->at(j)->GetApplication()->GetStopTime());
+                        if(txtime<0)
+                            break;
+                        
+                        DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+                        cout << " Flow no:  "<< ulBearerCounter<<" start time: "<<Simulator::Init()->Now()+txtime<<" End time: "<<Simulator::Init()->Now()+txtime+0.030<< endl;
+                        cout <<" Application ID: "<<ulBearer->at(j)->GetApplication()->GetApplicationID()+100<< endl;
+                        cout <<" Source Port: 0"<< endl;
+                        cout <<" Destination Port: "<<ulBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100<< endl;
+                        
+                        DEBUG_LOG_END
+                        
+                    }
+                    
+                    
+                }
+                
+                if(ulBearer->at(j)->GetApplication()->GetApplicationType()==Application::APPLICATION_TYPE_CBR)
+                {
+                    
+                    double interval= ulBearer->at(j)->GetApplication()->GetInterval();
+                    double lastpkttime = ulBearer->at(j)->GetApplication()->GetLastPacketCreationTime();
+                    
+                    double interval2=interval+lastpkttime;
+                    double txtime = interval2-Simulator::Init()->Now();
+                    ulTxTimes.push_back(txtime);
+                    
+                    if(txtime<0)
+                        break;
+                    
+                    Application* be = FlowsManager::Init()->CreateApplication((ulBearer->at(j)->GetApplication()->GetApplicationID())+100,twin,newTargetNodeForTwin,0,ulBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100,TransportProtocol::TRANSPORT_PROTOCOL_TYPE_UDP,
+                                                                              Application::APPLICATION_TYPE_TWIN_CBR,ulBearer->at(j)->GetQoSParameters(),lastpkttime);
+                    
+                    be->SetInterval(interval);
+                    be->SetStartTime(txtime);
+                    be->SetStopTime(ulBearer->at(j)->GetApplication()->GetStopTime());
+                    
+                    DEBUG_LOG_START_1(SIM_ENV_HANDOVER_NR)
+                    cout << " Flow no:  "<< ulBearerCounter<<" start time: "<<Simulator::Init()->Now()+txtime<< endl;
+                    cout <<" Application ID: "<<ulBearer->at(j)->GetApplication()->GetApplicationID()+100<< endl;
+                    cout <<" Source Port: 0"<< endl;
+                    cout <<" Destination Port: "<<ulBearer->at(j)->GetClassifierParameters()->GetDestinationPort()+100<< endl;
+                    
+                    DEBUG_LOG_END
+                }
+                
+                
+            }
+            
+            double maxDlTime = 0;
+            double maxUlTime =0;
+            for(auto times: dlTxTimes)
+            {
+                
+                maxDlTime = max(maxDlTime,times);
+            }
+            
+            for(auto times2: ulTxTimes)
+            {
+                
+                maxUlTime = max(maxUlTime,times2);
+            }
+            
+            double maxim = max(maxDlTime,maxUlTime);
+            
+            // set twin transmitting flag after Time now + max time of all ul and dl transmission time
+            Simulator::Init()->Schedule(maxim+0.002,&UserEquipment::SetTwinTransmittingFlag,twin,true);
+            Simulator::Init()->Schedule(maxim+0.002,&UserEquipment::SetTwinTransmittingFlag,ue,true);
+            
+            Simulator::Init()->Schedule(maxim+0.002,&Phy::SetTxPower,ue->GetPhy(),11.5);
+            
+            dlTxTimes.clear();
+            delete dlBearer;
+            delete ulBearer;
+            
+            
+        }
+        else
+        {
+            // donot Start Twin
+        }
+        
+    }
+    
+}
+
+void
+NetworkManager::StopTwin(UserEquipment* twin)
+{
+    GNodeB *newTargetNode = twin->GetTargetNode();
+    RrcEntity * newEnbRrc = newTargetNode->GetProtocolStack ()->GetRrcEntity ();
+    RrcEntity * twinRrc = twin->GetProtocolStack()->GetRrcEntity();
+    
+    if(newEnbRrc->GetRadioBearerContainer()->size()>0)
+    {
+        for (auto bearer : *newEnbRrc->GetRadioBearerContainer ())
+        {
+            if(bearer->GetDestination()->GetIDNetworkNode()==twin->GetIDNetworkNode())
+            {
+                bearer->GetApplication()->SetStopFlow(true);
+                
+            }
+            else
+            {}
+        }
+    }
+    
+    
+    if(twinRrc->GetRadioBearerContainer()->size()>0)
+    {
+        for (auto bearer : *twinRrc->GetRadioBearerContainer ())
+        {
+            bearer->GetApplication()->SetStopFlow(true);
+            
+        }
+        
+    }
+    
+    
+}
+
+void
+NetworkManager::CheckPacketsInTwin(UserEquipment* twin)
+{
+    int nbDlTwinBearer=0;
+    int nbUlTwinBearer=0;
+    bool stop = false;
+    
+    GNodeB *newTargetNode = twin->GetTargetNode();
+    RrcEntity * newEnbRrc = newTargetNode->GetProtocolStack ()->GetRrcEntity ();
+    RrcEntity * twinRrc = twin->GetProtocolStack()->GetRrcEntity();
+    vector<RadioBearer*> *dlBearerToDelete = new vector<RadioBearer*>();
+    vector<RadioBearer*> *ulBearerToDelete = new vector<RadioBearer*>();
+    
+    for (auto bearer : *newEnbRrc->GetRadioBearerContainer ())
+    {
+        if(bearer->GetDestination()->GetIDNetworkNode()==twin->GetIDNetworkNode())
+        {
+            dlBearerToDelete->push_back(bearer);
+            nbDlTwinBearer++;
+            
+        }
+    }
+    
+    
+    for (auto bearer : *twinRrc->GetRadioBearerContainer ())
+    {
+        ulBearerToDelete->push_back(bearer);
+        nbUlTwinBearer++;
+        
+    }
+    
+    
+    if(dlBearerToDelete->size()>0)
+    {
+        for(auto bearer : *dlBearerToDelete)
+        {
+            if (bearer->GetRlcEntity ()->GetRlcModel () == RlcEntity::AM_RLC_MODE)
+            {
+                AmRlcEntity* amRlc = (AmRlcEntity*) bearer->GetRlcEntity ();
+                bearer->GetMacQueue()->DropTwinPackets(bearer->GetApplication()->GetApplicationID());
+                
+                
+            }
+            else
+            {
+                bearer->GetMacQueue()->DropTwinPackets(bearer->GetApplication()->GetApplicationID());
+                
+            }
+        }
+    }
+    
+    if(ulBearerToDelete->size()>0)
+    {
+        for(auto bearer : *ulBearerToDelete)
+        {
+            if (bearer->GetRlcEntity ()->GetRlcModel () == RlcEntity::AM_RLC_MODE)
+            {
+                AmRlcEntity* amRlc = (AmRlcEntity*) bearer->GetRlcEntity ();
+                bearer->GetMacQueue()->DropTwinPackets(bearer->GetApplication()->GetApplicationID());
+                
+                
+            }
+            else
+            {
+                bearer->GetMacQueue()->DropTwinPackets(bearer->GetApplication()->GetApplicationID());
+                
+            }
+        }
+        
+    }
+    
+}
+
+void
+NetworkManager::DoHandover(UserEquipment* twin)
+{
+    GNodeB* enb= twin->GetTargetNode();
+    RrcEntity * newEnbRrc = enb->GetProtocolStack ()->GetRrcEntity ();
+    RrcEntity * twinRrc = twin->GetProtocolStack()->GetRrcEntity();
+    vector<RadioBearer*> *dlBearerToDelete = new vector<RadioBearer*>();
+    vector<RadioBearer*> *ulBearerToDelete = new vector<RadioBearer*>();
+    
+    //delete downlink bearers
+    
+    for(auto bearer: *newEnbRrc->GetRadioBearerContainer())
+    {
+        if(bearer->GetDestination()->GetIDNetworkNode()==twin->GetIDNetworkNode())
+        {
+            dlBearerToDelete->push_back(bearer);
+            
+        }
+    }
+    
+    for (auto bearer : *dlBearerToDelete)
+    {
+        newEnbRrc->DelRadioBearer (bearer);
+    }
+    dlBearerToDelete->clear ();
+    delete dlBearerToDelete;
+    
+    
+    
+    vector<RadioBearerSink* > *dlSinkToDelete = new vector<RadioBearerSink* > ();
+    
+    for(auto sink: *twinRrc->GetRadioBearerSinkContainer())
+    {
+        if(sink->GetDestination()->GetIDNetworkNode()==twin->GetIDNetworkNode())
+        {
+            dlSinkToDelete->push_back(sink);
+        }
+    }
+    for (auto sink : *dlSinkToDelete)
+    {
+        twinRrc->DelRadioBearerSink (sink);
+    }
+    dlSinkToDelete->clear ();
+    delete dlSinkToDelete;
+    
+    /// delete ul bearers
+    
+    for(auto bearer: *twinRrc->GetRadioBearerContainer())
+    {
+        dlBearerToDelete->push_back(bearer);
+        
+    }
+    
+    for (auto bearer : *ulBearerToDelete)
+    {
+        twinRrc->DelRadioBearer (bearer);
+    }
+    ulBearerToDelete->clear ();
+    delete ulBearerToDelete;
+    
+    
+    
+    vector<RadioBearerSink* > *ulSinkToDelete = new vector<RadioBearerSink* > ();
+    
+    for(auto sink: *newEnbRrc->GetRadioBearerSinkContainer())
+    {
+        if(sink->GetSource()->GetIDNetworkNode()==twin->GetIDNetworkNode())
+        {
+            ulSinkToDelete->push_back(sink);
+        }
+    }
+    for (auto sink : *ulSinkToDelete)
+    {
+        newEnbRrc->DelRadioBearerSink (sink);
+    }
+    ulSinkToDelete->clear ();
+    delete ulSinkToDelete;
+    
+    
+    UserEquipment* ue = NetworkManager::Init()->GetTwinUserEquipmentByID(twin->GetIDNetworkNode());
+    //NetworkManager::Init()->QuickHandover(Simulator::Init()->Now(),ue, ue->GetTargetNode(), twin->GetTargetNode());
+    //UserEquipment* twin = NetworkManager::Init()->GetTwinUserEquipmentByID(ue->GetIDNetworkNode());
+    
+    
+    // TransferRadioBearer For UE, make UE active, Twin Idle and Set Twin Transmitting Flag to true for UE
+    if(ue->GetNodeState()==NetworkNode::STATE_ACTIVE||ue->GetNodeState()==NetworkNode::STATE_IDLE)
+    {
+        ue->SetNodeState(NetworkNode::STATE_DETACHED);
+    }
+    Simulator::Init()->Schedule(0.002,
+                                &NetworkManager::TransferBearerInfo,
+                                this,
+                                ue,
+                                twin->GetTargetNode());
+    Simulator::Init()->Schedule(0.002,
+                                &NetworkNode::MakeActive,ue);
+    Simulator::Init()->Schedule(0.002,
+                                &UserEquipment::SetTwinTransmittingFlag,ue,true);
+    
+    
+    Simulator::Init()->Schedule(0.002,
+                                &Phy::SetTxPower,ue->GetPhy(),23);
+    
+    //TransferBearerInfo(ue,);
+    //ue->MakeActive();
+    //ue->SetTwinTransmittingFlag(true);
+    //twin->SetNodeState(NetworkNode::STATE_IDLE);
+    ue->GetMobilityModel ()->SetLastHandoverTime(Simulator::Init()->Now());
+    
+}
+
+void
+NetworkManager::DeleteTwinBearerOnly(UserEquipment* twin)
+{
+    GNodeB* enb = twin->GetTargetNode();
+    
+    RrcEntity * newEnbRrc = enb->GetProtocolStack ()->GetRrcEntity ();
+    RrcEntity * twinRrc = twin->GetProtocolStack()->GetRrcEntity();
+    vector<RadioBearer*> *dlBearerToDelete = new vector<RadioBearer*>();
+    vector<RadioBearer*> *ulBearerToDelete = new vector<RadioBearer*>();
+    
+    //delete downlink bearers
+    
+    for(auto bearer: *newEnbRrc->GetRadioBearerContainer())
+    {
+        if(bearer->GetDestination()->GetIDNetworkNode()==twin->GetIDNetworkNode())
+        {
+            dlBearerToDelete->push_back(bearer);
+            
+        }
+    }
+    
+    for (auto bearer : *dlBearerToDelete)
+    {
+        newEnbRrc->DelRadioBearer (bearer);
+    }
+    dlBearerToDelete->clear ();
+    delete dlBearerToDelete;
+    
+    
+    
+    vector<RadioBearerSink* > *dlSinkToDelete = new vector<RadioBearerSink* > ();
+    
+    for(auto sink: *twinRrc->GetRadioBearerSinkContainer())
+    {
+        if(sink->GetDestination()->GetIDNetworkNode()==twin->GetIDNetworkNode())
+        {
+            dlSinkToDelete->push_back(sink);
+        }
+    }
+    for (auto sink : *dlSinkToDelete)
+    {
+        twinRrc->DelRadioBearerSink (sink);
+    }
+    dlSinkToDelete->clear ();
+    delete dlSinkToDelete;
+    
+    /// delete ul beaerers
+    
+    for(auto bearer: *twinRrc->GetRadioBearerContainer())
+    {
+        dlBearerToDelete->push_back(bearer);
+        
+    }
+    
+    for (auto bearer : *ulBearerToDelete)
+    {
+        twinRrc->DelRadioBearer (bearer);
+    }
+    ulBearerToDelete->clear ();
+    delete ulBearerToDelete;
+    
+    
+    
+    vector<RadioBearerSink* > *ulSinkToDelete = new vector<RadioBearerSink* > ();
+    
+    for(auto sink: *newEnbRrc->GetRadioBearerSinkContainer())
+    {
+        if(sink->GetSource()->GetIDNetworkNode()==twin->GetIDNetworkNode())
+        {
+            ulSinkToDelete->push_back(sink);
+        }
+    }
+    for (auto sink : *ulSinkToDelete)
+    {
+        newEnbRrc->DelRadioBearerSink (sink);
+    }
+    ulSinkToDelete->clear ();
+    delete ulSinkToDelete;
+    
+    
+    UserEquipment* ue = NetworkManager::Init()->GetTwinUserEquipmentByID(twin->GetIDNetworkNode());
+    ue->SetTwinTransmittingFlag(true);
+    twin->SetNodeState(NetworkNode::STATE_IDLE);
+    
+    //NetworkManager::Init()->QuickHandover(Simulator::Init()->Now(),ue, ue->GetTargetNode(), twin->GetTargetNode());
+    //UserEquipment* twin = NetworkManager::Init()->GetTwinUserEquipmentByID(ue->GetIDNetworkNode());
+    
+    
+    // TransferRadioBearer For UE, make UE active, Twin Idle and Set Twin Transmitting Flag to true for UE
+    //TransferBearerInfo(ue,twin->GetTargetNode());
+    //ue->MakeActive();
+    
+    //ue->GetMobilityModel ()->SetLastHandoverTime(Simulator::Init()->Now());
+}
+
+double
+NetworkManager::GetShadowingForTwinFromUE(GNodeB* enb, UserEquipment* ue)
+{
+    if(!UPLINK)
+    {
+        ChannelRealization* c_dl = enb->GetPhy()->GetDlChannel()->GetPropagationLossModel()->GetChannelRealization(enb,ue);
+        return c_dl->GetShadowing();
+    }
+    else
+    {
+        ChannelRealization* c_ul = enb->GetPhy()->GetUlChannel()->GetPropagationLossModel()->GetChannelRealization(ue,enb);
+        return c_ul->GetShadowing();
+    }
+}
+
+double
+NetworkManager::GetPathLossForTwinFromUE(GNodeB* enb, UserEquipment* ue)
+{
+    if(!UPLINK)
+    {
+        ChannelRealization* c_dl = enb->GetPhy()->GetDlChannel()->GetPropagationLossModel()->GetChannelRealization(enb,ue);
+        return c_dl->GetPathLoss();
+    }
+    else
+    {
+        ChannelRealization* c_ul = enb->GetPhy()->GetUlChannel()->GetPropagationLossModel()->GetChannelRealization(ue,enb);
+        return c_ul->GetPathLoss();
+    }
+}

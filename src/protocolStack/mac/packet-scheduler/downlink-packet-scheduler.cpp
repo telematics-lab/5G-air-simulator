@@ -421,8 +421,8 @@ DownlinkPacketScheduler::RBsAllocation ()
     
     FlowsToSchedule flowsForRetransmission;
     
-    for (int i = 0; i < nbOfRBs; i++) {
-        for (int j = 0; j < (int)flows->size (); j++) {
+    for (int j = 0; j < (int)flows->size (); j++) {
+        for (int i = 0; i < nbOfRBs; i++) {
             int harqPid;
             GNodeB::UserEquipmentRecord* ueRecord = flows->at (j)->GetUe()->GetTargetNodeRecord();
             HarqManager* harq = ueRecord->GetHarqManager ();
@@ -641,7 +641,6 @@ DownlinkPacketScheduler::RBsAllocation ()
                     vector< shared_ptr<arma::cx_fmat> > channelMatrices;
                     vector<double> widebandSinrs;
                     vector<int> ranks;
-                    int layerCounter = 0;
                     vector< shared_ptr<FlowToSchedule> > allScheduledFlows = scheduledFlows;
                     allScheduledFlows.insert(allScheduledFlows.end(),flowsForRetransmission.begin(),flowsForRetransmission.end());
                     
@@ -649,6 +648,7 @@ DownlinkPacketScheduler::RBsAllocation ()
                         shared_ptr<FlowToSchedule> flow = allScheduledFlows.at(k);
                         // TODO: choose layers here or in specialized scheduler?
                         vector<int> assignedLayers;
+                        int layerCounter = 0;
                         
                         if (flow->GetFullCsiFeedbacks ().size()>0) {
                             channelMatrices.push_back(flow->GetFullCsiFeedbacks ().at (rb));
@@ -697,7 +697,9 @@ DownlinkPacketScheduler::RBsAllocation ()
                 
                 double sinr = amc->GetSinrFromCQI (scheduledFlow->GetCqiFeedbacks ().at (rb));
                 l_bFlowScheduledSINR[l_iScheduledFlowsIndices.at(i)].push_back(sinr);
-                int mcs = amc->GetMCSFromSinrVector (l_bFlowScheduledSINR[l_iScheduledFlowsIndices.at(i)]);
+                //TODO: CHECK GD here I see 2 problems: 1 this class should not be modified like this, you should try something else (for exaple defining the margin as an attribute of AMC and set it in the scenario), 2 why defining a double variable if its value is int
+                double margin = 2;
+                int mcs = amc->GetMCSFromSinrVector (l_bFlowScheduledSINR[l_iScheduledFlowsIndices.at(i)], margin);
                 int txMode = scheduledFlow->GetUe()->GetTargetNodeRecord()->GetDlTxMode();
                 int M, N, rank;
                 M = scheduledFlow->GetBearer ()->GetSource ()->GetPhy()->GetTxAntennas();
@@ -725,7 +727,8 @@ DownlinkPacketScheduler::RBsAllocation ()
                                                                                               l_bFlowScheduledSINR[l_iScheduledFlowsIndices.at(i)],
                                                                                               scheduledFlow->GetUeRecord()->GetChannelMatrix(),
                                                                                               precodingMatrices, scheduledFlow->GetAssignedLayers());
-                            mcs = amc->GetMCSFromSinrVector(newSinr);
+                            //TODO: CHECK GD this method should not be modified like this, you should try something else (for exaple defining the margin as an attribute of AMC and set it in the scenario)
+                            mcs = amc->GetMCSFromSinrVector(newSinr, margin);
                             
                             DEBUG_LOG_START_1(SIM_ENV_MCS_DEBUG)
                             cout << "BS_SINR_2 UE " << scheduledFlows.at(i)->GetUe()->GetIDNetworkNode() << " SINR "<< newSinr << " MCS " << mcs << endl;
@@ -808,34 +811,6 @@ DownlinkPacketScheduler::RBsAllocation ()
                         cout << "Wrong MCS set for multicast stream: " << mc_mcs << endl;
                         exit(1);
                     }
-                    //                  int burstSize = ((TraceBased*)(flow->GetBearer()->GetApplication()))->GetBurstSize();
-                    //                  double maxDelay = flow->GetBearer()->GetApplication()->GetQoSParameters()->GetMaxDelay();
-                    //                  int minTbs;
-                    //                  switch(FrameManager::Init()->GetMbsfnPattern())
-                    //                    {
-                    //                      case 1:
-                    //                        minTbs = round( burstSize / (maxDelay * 1000 * 1. / 10.) * 8 );
-                    //                        break;
-                    //                      case 2:
-                    //                        minTbs = round( burstSize / (maxDelay * 1000 * 3. / 10.) * 8 );
-                    //                        break;
-                    //                      case 3:
-                    //                        minTbs = round( burstSize / (maxDelay * 1000 * 6. / 10.) * 8 );
-                    //                        break;
-                    //                      default:
-                    //                        minTbs = round( burstSize / (maxDelay * 1000 * 1. / 10.) * 8 );
-                    //                        break;
-                    //                    }
-                    //
-                    //                  AMCModule* amc = new AMCModule();
-                    //                  for(mcs=0; mcs<27; mcs++)
-                    //                    {
-                    //                      if (amc->GetTBSizeFromMCS (mcs, nbOfRBs)>minTbs)
-                    //                        {
-                    //                          break;
-                    //                        }
-                    //                    }
-                    //                  delete amc;
                 }
                 else if(txMode != 11)
                 {
@@ -847,17 +822,25 @@ DownlinkPacketScheduler::RBsAllocation ()
                     DEBUG_LOG_START_1(SIM_ENV_MCS_DEBUG)
                     cout << "MCS_DEBUG estimated SINR values: UE " << flow->GetUe()->GetIDNetworkNode() << ", SINRs " << estimatedSinrValues << endl;
                     DEBUG_LOG_END
-                    vector<double> newSinr = PrecodingCalculator::adjustSinrForMuMimo(
-                                                                                      estimatedSinrValues,
-                                                                                      flow->GetFullCsiFeedbacks(),
-                                                                                      precodingMatrices, flow->GetAssignedLayers());
-                    //                mcs = amc->GetMCSFromSinrVector(newSinr);
+                    
+                    bool need_adjust = false;
+                    for (auto rb : *flow->GetListOfAllocatedRBs() ) {
+                        if (allocationsPerRB.at(rb) > 1)
+                            need_adjust = true;
+                    }
+                    vector<double> newSinr;
+                    if (need_adjust)
+                        newSinr = PrecodingCalculator::adjustSinrForMuMimo(estimatedSinrValues,
+                                                                           flow->GetFullCsiFeedbacks(),
+                                                                           precodingMatrices, flow->GetAssignedLayers());
+                    else
+                        newSinr = estimatedSinrValues;
+                    
                     mcs = GetMacEntity()->GetAmcModule()->GetMCSFromSinrVector(newSinr);
                     
                     DEBUG_LOG_START_1(SIM_ENV_MCS_DEBUG)
                     cout << "MCS_DEBUG adjusted SINR values: UE " << flow->GetUe()->GetIDNetworkNode() << " SINRs " << newSinr << endl;
                     DEBUG_LOG_END
-                    //                  mcs = amc->GetMCSFromSinrVector(estimatedSinrValues);
                 }
                 for (int rb = 0; rb < (int)flow->GetListOfAllocatedRBs ()->size (); rb++ ) {
                     flow->GetListOfSelectedMCS()->push_back(mcs);
@@ -1060,6 +1043,7 @@ DownlinkPacketScheduler::RBsAllocation ()
                     }
                 }
             }
+            flow->GetUe()->GetTargetNode()->SetAllocatedDlRBs(*flow->GetListOfAllocatedRBs());
             
             // notify operation to HARQ manager
             

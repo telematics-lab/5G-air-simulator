@@ -132,6 +132,9 @@ public:
 
 
   void PrintQueueInfo (void);
+    
+  void
+  DropTwinPackets(int bearerID);
 };
 
 #endif /* MACQUEUE_H_ */

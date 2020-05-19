@@ -53,7 +53,10 @@ public:
     APPLICATION_TYPE_CBR,
     APPLICATION_TYPE_WEB,
     APPLICATION_TYPE_FTP2,
-    APPLICATION_TYPE_EXTERNAL_SOURCE
+    APPLICATION_TYPE_EXTERNAL_SOURCE,
+    APPLICATION_TYPE_REFERENCESYMBOLSFORULMIMO,
+    APPLICATION_TYPE_TWIN_VOIP,
+    APPLICATION_TYPE_TWIN_CBR
   };
 
   Application();
@@ -105,6 +108,21 @@ public:
 
   void Trace (Packet* packet);
 
+  //TODO: CHECK GD why here and not inside VoIP or CBR ?
+
+  void SetInterval(double duration);
+  void SetState(bool state);
+  void SetStateDuration(double duration);
+  void SetEndState(double endstate);
+  void SetLastPacketCreationTime(double time);
+  bool GetState(void);
+  double GetStateDuration(void);
+  double GetEndState(void);
+  double GetLastPacketCreationTime(void);
+  void SetStopFlow(bool flag);
+  bool GetStopFlow(void);
+  double GetInterval(void);
+    
   //Debug
   void Print (void);
 
@@ -131,6 +149,15 @@ private:
   double m_stopTime;
 
   int m_applicationID;
+ 
+    //TODO: CHECK GD why here and not inside VoIP or CBR ?
+
+  double m_interval;
+  bool m_stateON;
+  double m_stateDuration;
+  double m_endState;
+  double m_lastPacketCreationTime;
+  double m_stopFlow;
 };
 
 #endif /* APPLICATION_H_ */

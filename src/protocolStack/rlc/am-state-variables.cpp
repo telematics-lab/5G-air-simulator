@@ -40,11 +40,11 @@ AmStateVariables::AmStateVariables()
   m_vr_ms = 0;
   m_vr_h = 0;
 
-  m_t_poll_retransmit = 10;
+  m_t_poll_retransmit = 10; //3 //TODO: CHECK GD it is necessary to have 3 instead of 10? Maybe you can change these values in the scenario if you need
   m_t_reordering = 10;
   m_t_status_prohibit = 10;
 
-  m_max_retx_threshold = 3;
+  m_max_retx_threshold = 3; //10 //TODO: CHECK GD it is necessary to have 10 instead of 3?
   m_poll_PDU = 10;
   m_poll_Byte = 10;
 }

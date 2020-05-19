@@ -165,40 +165,40 @@ UserEquipment::GetTimePositionUpdate (void)
 {
   return m_timePositionUpdate;
 }
-
-void
-UserEquipment::UpdateUserPosition (double time)
-{
-  GetMobilityModel ()->UpdatePosition (time);
-
-  SetIndoorFlag(NetworkManager::Init()->CheckIndoorUsers(this));
-
-  if (GetMobilityModel ()->GetHandover () == true)
-    {
-      GNodeB* targetNode = GetTargetNode ();
-
-      if (targetNode->GetProtocolStack ()->GetRrcEntity ()->
-          GetHandoverEntity ()->CheckHandoverNeed (this))
-        {
-          GNodeB* newTargetNode = targetNode->GetProtocolStack ()
-                                       ->GetRrcEntity ()->GetHandoverEntity ()->GetHoManager ()->m_target;
-DEBUG_LOG_START_1(SIM_ENV_HANDOVER_DEBUG)
-          cout << "** HO ** \t time: " << time << " user " <<  GetIDNetworkNode () <<
-                    " old gNB " << targetNode->GetIDNetworkNode () <<
-                    " new gNB " << newTargetNode->GetIDNetworkNode () << endl;
-DEBUG_LOG_END
-          NetworkManager::Init()->HandoverProcedure(time, this, targetNode, newTargetNode);
-        }
-    }
-
-  if (GetMobilityModel ()-> GetMobilityModel() != Mobility::CONSTANT_POSITION) {
-    //schedule the new update after m_timePositionUpdate
-    Simulator::Init()->Schedule(m_timePositionUpdate,
-                              &UserEquipment::UpdateUserPosition,
-                              this,
-                              Simulator::Init ()->Now());
-  }
-}
+//TODO: CHECK GD for the moment I only comment the original method and implemented the new one (leave this todo)
+//void
+//UserEquipment::UpdateUserPosition (double time)
+//{
+//  GetMobilityModel ()->UpdatePosition (time);
+//
+//  SetIndoorFlag(NetworkManager::Init()->CheckIndoorUsers(this));
+//
+//  if (GetMobilityModel ()->GetHandover () == true)
+//    {
+//      GNodeB* targetNode = GetTargetNode ();
+//
+//      if (targetNode->GetProtocolStack ()->GetRrcEntity ()->
+//          GetHandoverEntity ()->CheckHandoverNeed (this))
+//        {
+//          GNodeB* newTargetNode = targetNode->GetProtocolStack ()
+//                                       ->GetRrcEntity ()->GetHandoverEntity ()->GetHoManager ()->m_target;
+//DEBUG_LOG_START_1(SIM_ENV_HANDOVER_DEBUG)
+//          cout << "** HO ** \t time: " << time << " user " <<  GetIDNetworkNode () <<
+//                    " old gNB " << targetNode->GetIDNetworkNode () <<
+//                    " new gNB " << newTargetNode->GetIDNetworkNode () << endl;
+//DEBUG_LOG_END
+//          NetworkManager::Init()->HandoverProcedure(time, this, targetNode, newTargetNode);
+//        }
+//    }
+//
+//  if (GetMobilityModel ()-> GetMobilityModel() != Mobility::CONSTANT_POSITION) {
+//    //schedule the new update after m_timePositionUpdate
+//    Simulator::Init()->Schedule(m_timePositionUpdate,
+//                              &UserEquipment::UpdateUserPosition,
+//                              this,
+//                              Simulator::Init ()->Now());
+//  }
+//}
 
 
 UeMacEntity*
@@ -284,4 +284,163 @@ UserEquipment::Print (void)
             "\n\t m_speed = " << GetMobilityModel ()->GetSpeed () <<
             "\n\t m_speedDirection = " << GetMobilityModel ()->GetSpeedDirection () <<
             endl;
+}
+
+void
+UserEquipment::UpdateUserPosition (double time) {
+    if(hasTwin()) {               // when the twinmodel ho is activated
+        if(IsTwin()) {   // if it is a twin
+            UserEquipment* ue = NetworkManager::Init()->GetTwinUserEquipmentByID(GetIDNetworkNode());
+            GetMobilityModel ()->UpdatePosition (time);
+            SetIndoorFlag(NetworkManager::Init()->CheckIndoorUsers(this));
+            GetTargetNode()->GetProtocolStack()->GetRrcEntity()->GetHandoverEntity()->GetHoManager()->CalculatePower(this);
+            if(IsTwinTransmitting()&& ue->IsTwinTransmitting()) {  // If Both are transmitting
+                if(GetTargetNode()->GetProtocolStack()->GetRrcEntity()->GetHandoverEntity()->GetHoManager()->CheckDetachTimeForTwin(this)) {
+                    NetworkManager::Init()->CheckPacketsInTwin(this);
+                    NetworkManager::Init()->DoHandover(this);
+                }
+                else {
+                    if(!IsTwinTransmitting()&&!ue->IsTwinTransmitting()) {
+                        NetworkManager::Init()->CheckPacketsInTwin(this);
+                        NetworkManager::Init()->DeleteTwinBearerOnly(this);
+                    }
+                }
+            }
+            
+            if (GetMobilityModel ()-> GetMobilityModel() != Mobility::CONSTANT_POSITION) {
+                //schedule the new update after m_timePositionUpdate
+                Simulator::Init()->Schedule(m_timePositionUpdate,
+                                            &UserEquipment::UpdateUserPosition,
+                                            this,
+                                            Simulator::Init ()->Now());
+            }
+        }
+        else {  // if it is a original node
+            UserEquipment* twin = NetworkManager::Init()->GetTwinUserEquipmentByID(GetIDNetworkNode());
+            GetMobilityModel ()->UpdatePosition (time);
+            SetIndoorFlag(NetworkManager::Init()->CheckIndoorUsers(this));
+            GNodeB* targetNode = GetTargetNode ();
+            
+            GetTargetNode()->GetProtocolStack()->GetRrcEntity()->GetHandoverEntity()->GetHoManager()->CalculatePower(this);
+            
+            
+            if(IsTwinTransmitting()&&!twin->IsTwinTransmitting()) {  // If only UE is transmitting
+                if (GetMobilityModel ()->GetHandover () == true) {
+                    GNodeB* targetNode = GetTargetNode ();
+                    if (targetNode->GetProtocolStack ()->GetRrcEntity ()->
+                        GetHandoverEntity ()->CheckHandoverNeed (this)) {
+                        SetTwinTransmittingFlag(false);
+                        UserEquipment* twin = NetworkManager::Init()->GetTwinUserEquipmentByID(GetIDNetworkNode());
+                        GNodeB* newTargetNode = targetNode->GetProtocolStack ()->GetRrcEntity ()->GetHandoverEntity ()->GetHoManager ()->m_target;
+                        NetworkManager::Init()->DualTransmission(this,newTargetNode);
+                    }
+                }
+            }
+            
+            
+            if (GetMobilityModel ()-> GetMobilityModel() != Mobility::CONSTANT_POSITION) {
+                //schedule the new update after m_timePositionUpdate
+                Simulator::Init()->Schedule(m_timePositionUpdate,
+                                            &UserEquipment::UpdateUserPosition,
+                                            this,
+                                            Simulator::Init ()->Now());
+            }
+            
+        }
+    }
+    
+    else {  // when the LTE HO is acivated
+        
+        if(!IsTwin()) { // if this a original node
+            GetMobilityModel ()->UpdatePosition (time);
+            SetIndoorFlag(NetworkManager::Init()->CheckIndoorUsers(this));
+            GetTargetNode()->GetProtocolStack()->GetRrcEntity()->GetHandoverEntity()->GetHoManager()->CalculatePower(this);
+            
+            if (GetMobilityModel ()->GetHandover () == true) {
+                
+                if(Simulator::Init()->Now()-GetMobilityModel()->GetLastHandoverTime()>GetTargetNode()->GetProtocolStack()->GetRrcEntity()->GetHandoverEntity()->GetDetachTime()) {
+                    GNodeB* targetNode = GetTargetNode ();
+                    
+                    if (targetNode->GetProtocolStack ()->GetRrcEntity ()->
+                        GetHandoverEntity ()->CheckHandoverNeed (this)) {
+                        
+                        GNodeB* newTargetNode = targetNode->GetProtocolStack ()
+                        ->GetRrcEntity ()->GetHandoverEntity ()->GetHoManager ()->m_target;
+                        
+                        DEBUG_LOG_START_1(SIM_ENV_HANDOVER_DEBUG)
+                        cout << "** HO ** \t time: " << time << " user " <<  GetIDNetworkNode () <<
+                        " old eNB " << targetNode->GetIDNetworkNode () <<
+                        " new eNB " << newTargetNode->GetIDNetworkNode () << endl;
+                        DEBUG_LOG_END
+                        NetworkManager::Init()->HandoverProcedure(time, this, targetNode, newTargetNode);
+                    }
+                    
+                }
+            }
+            
+            if (GetMobilityModel ()-> GetMobilityModel() != Mobility::CONSTANT_POSITION) {
+                //schedule the new update after m_timePositionUpdate
+                Simulator::Init()->Schedule(m_timePositionUpdate,
+                                            &UserEquipment::UpdateUserPosition,
+                                            this,
+                                            Simulator::Init ()->Now());
+            }
+            
+        }
+        else {  // if this is a twin, just update the positiion
+            GetMobilityModel ()->UpdatePosition (time);
+            SetIndoorFlag(NetworkManager::Init()->CheckIndoorUsers(this));
+            GetTargetNode()->GetProtocolStack()->GetRrcEntity()->GetHandoverEntity()->GetHoManager()->CalculatePower(this);
+            if (GetMobilityModel ()-> GetMobilityModel() != Mobility::CONSTANT_POSITION) {
+                //schedule the new update after m_timePositionUpdate
+                Simulator::Init()->Schedule(m_timePositionUpdate,
+                                            &UserEquipment::UpdateUserPosition,
+                                            this,
+                                            Simulator::Init ()->Now());
+            }
+            
+        }
+        
+    }
+}
+
+
+
+double
+UserEquipment::GetDistanceFromServingCell() {
+    return m_distanceFromServingCell;
+}
+
+void
+UserEquipment::SetDistanceFromServingCell(double distance) {
+    m_distanceFromServingCell = distance;
+}
+
+void
+UserEquipment::SetTwinFlag ( bool flag) {
+    m_isTwin = flag;
+}
+
+bool
+UserEquipment::IsTwin(void) {
+    return m_isTwin;
+}
+void
+UserEquipment::SetTwinTransmittingFlag ( bool flag) {
+    m_isTwinTransmitting = flag;
+}
+
+bool
+UserEquipment::IsTwinTransmitting(void) {
+    return m_isTwinTransmitting;
+}
+
+void
+UserEquipment::SethasTwin(bool flag) {
+    m_hasTwin = flag;
+}
+
+bool
+UserEquipment::hasTwin() {
+    return m_hasTwin;
 }

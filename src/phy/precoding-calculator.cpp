@@ -84,13 +84,25 @@ PrecodingCalculator::RegularizedZeroForcing(
         {
           receiverFilters.at(i) = arma::trans( *channelMatrices.at(i)
                                               // assume MRC receive filter
-//                                              *arma::ones<arma::cx_fmat>( nbTxAntennas, 1 ))
+//                                              *arma::ones<arma::cx_fmat>( nbTxAntennas, 1 )) //TODO: CHECK GD why in your code you used MRC and not MMSE as it is now?
                                     //  assume MMSE receive filter
                                     * arma::inv( *channelMatrices.at(i)*arma::ones<arma::cx_fmat>( nbTxAntennas, 1 )*arma::ones<arma::cx_fmat>( 1, nbTxAntennas )*arma::trans(*channelMatrices.at(i))
                                                     + noise_interference_vec_2.at(i) ))
                                 ;
           receiverFilters.at(i) = arma::normalise(receiverFilters.at(i));
         }
+      //TODO: CHECK GD i believe we need to add a && condition to this "if" for checking the activation of Uplink MIMO
+      else if (userRanks.at(i) == channelMatrices.at(i)->n_cols) //for uplink mimo
+      {
+          receiverFilters.at(i) = ( arma::trans(*channelMatrices.at(i)) //for uplink mimo
+                                   // assume MRC receive filter
+                                   //*arma::ones<arma::cx_fmat>( nbTxAntennas, 1 ));
+                                   //  assume MMSE receive filter
+                                   * arma::inv( *channelMatrices.at(i)*arma::trans(*channelMatrices.at(i))
+                                               + noise_interference_vec_2.at(i) ));
+          
+          receiverFilters.at(i) = arma::normalise(receiverFilters.at(i));//for uplink mimo
+      }
       else
         {
           cout << "Error: unsupported rank for precoding ("

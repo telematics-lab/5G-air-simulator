@@ -55,14 +55,16 @@ public:
   GetTBSizeFromMCS (int mcs1, int mcs2, int nbRBs, int rank);
   double
   GetEfficiencyFromCQI (int cqi);
+  //TODO:CHECK GD I modified directly this method with an optional parameter for the margin, without creating a new one
   int
-  GetCQIFromSinr (double sinr);
+  GetCQIFromSinr (double sinr,  double margin = 0.0); 
   double
   GetSinrFromCQI (int cqi);
   int
   GetModulationOrderFromMCS(int mcs);
+  //TODO:CHECK GD I modified directly this method with an optional parameter for the margin, without creating a new one
   int
-  GetMCSFromSinrVector(const vector<double> &sinr);
+  GetMCSFromSinrVector(const vector<double> &sinr,  double margin = 0.0);
 
   vector<int> CreateCqiFeedbacks (vector<double> sinr);
   bool getUseExtendedCQI (void);

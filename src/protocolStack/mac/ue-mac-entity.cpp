@@ -195,7 +195,13 @@ DEBUG_LOG_END
 void
 UeMacEntity::ScheduleUplinkTransmission (int nbPrb, int mcs)
 {
-  int availableBytes = GetAmcModule ()->GetTBSizeFromMCS (mcs, nbPrb)/8;
+    //TODO: CHECK GD I think this modification is useless since GetTBSizeFromMCS (mcs, mcs, nbPrb, 1) = GetTBSizeFromMCS(mcs, nbPrb)
+    int txMode = GetDevice()->GetTargetNode()->GetMacEntity()->GetDefaultUlTxMode();
+    int availableBytes;
+    if (txMode == 11)
+        availableBytes = GetAmcModule ()->GetTBSizeFromMCS (mcs, mcs, nbPrb, 1)/8; //for uplink mimo
+    else
+        availableBytes = GetAmcModule ()->GetTBSizeFromMCS (mcs, nbPrb)/8;
 
   shared_ptr<PacketBurst> pb = make_shared<PacketBurst> ();
   RrcEntity *rrc = GetDevice ()->GetProtocolStack ()->GetRrcEntity ();
@@ -204,19 +210,35 @@ UeMacEntity::ScheduleUplinkTransmission (int nbPrb, int mcs)
     {
       for (auto bearer : *rrc->GetRadioBearerContainer ())
         {
-          if (availableBytes > 0)
-            {
+          if (availableBytes > 0) {
               RlcEntity *rlc = bearer->GetRlcEntity ();
               shared_ptr<PacketBurst> pb2 = rlc->TransmissionProcedure (availableBytes);
-              if (pb2->GetNPackets () > 0)
-                {
-                  for (auto packet : pb2->GetPackets())
-                    {
+              if (pb2->GetNPackets () > 0) {
+                  for (auto packet : pb2->GetPackets()) {
                       pb->AddPacket (packet->Copy ());
                     }
                 }
               availableBytes -= pb2->GetSize ();
             }
+          //TODO: CHECK GD does this update need to always be executed? or is needed only in specific situations? probably the if can be moved before the for?
+          else {
+              //update rtts of each packet
+              double now = Simulator::Init()->Now();
+              for(auto pkt : *bearer->GetMacQueue()->GetPacketQueue()) {
+                  double timeStamp = pkt.m_packet->GetTimeStamp();
+                  double hol = now - timeStamp;
+                  double maxDelay = bearer->GetQoSParameters()->GetMaxDelay();
+                  double rtts = maxDelay - hol;
+                  pkt.m_packet->SetRtts(rtts);
+              }
+              if (bearer->GetMacQueue()->GetNbDataPackets()>0 && bearer->GetDestination()->m_ulSchedType == 5)
+              {
+                  //delete packets from queue
+                  bearer->GetMacQueue ()->CheckForDropPackets (
+                                                               bearer->GetQoSParameters ()->GetMaxDelay (), bearer->GetApplication ()->GetApplicationID ());
+              }
+              
+          }
         }
 
       GetDevice ()->SendPacketBurst (pb);
@@ -257,7 +279,10 @@ void
 UeMacEntity::CheckForDropPackets (void)
 {
   RrcEntity *rrc = GetDevice ()->GetProtocolStack ()->GetRrcEntity ();
-
+  
+  //TODO: CHECK GD is it not sufficient anymore to call CheckForDropPackets only when UE sends the scheduling request?
+  Simulator::Init()->Schedule(0.001, &UeMacEntity::CheckForDropPackets, this);
+  
   for (auto bearer : *rrc->GetRadioBearerContainer())
     {
       if (bearer->GetMacQueue()->GetNbDataPackets()>0)

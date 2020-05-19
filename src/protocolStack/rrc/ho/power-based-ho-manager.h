@@ -32,6 +32,9 @@ public:
   virtual ~PowerBasedHoManager() = default;
 
   virtual bool CheckHandoverNeed (UserEquipment* ue);
+    
+  virtual bool CheckDetachTimeForTwin (UserEquipment * twin);
+  virtual void CalculatePower(UserEquipment* ue);
 };
 
 #endif /* POWERBASEDHOMANAGER_H_ */

@@ -69,7 +69,10 @@ public:
 
   void SetDefaultDlTxMode (int txmode);
   int GetDefaultDlTxMode(void);
-
+  
+  void SetDefaultUlTxMode (int txmode);
+  int GetDefaultUlTxMode(void);
+    
 private:
 
   UplinkPacketScheduler* m_uplinkScheduler;
@@ -77,6 +80,7 @@ private:
   GnbRandomAccess* m_gnbrandomaccess;
   RandomAccessResponseIdealControlMessage* flag;
   int m_defaultDlTxMode;
+  int m_defaultUlTxMode;
 };
 
 

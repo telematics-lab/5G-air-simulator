@@ -40,6 +40,7 @@
 #include "../protocolStack/mac/packet-scheduler/nb-roundrobin-uplink-packet-scheduler.h"
 #include "../protocolStack/mac/packet-scheduler/nb-fifo-uplink-packet-scheduler.h"
 #include "../protocolStack/mac/packet-scheduler/nb-uplink-packet-scheduler.h"
+#include "../protocolStack/mac/packet-scheduler/priority-uplink-packet-scheduler.h"
 #include "../phy/gnb-phy.h"
 #include "../core/spectrum/bandwidth-manager.h"
 #include "../protocolStack/packet/packet-burst.h"
@@ -102,6 +103,7 @@ GNodeB::~GNodeB()
   Destroy ();
   m_userEquipmentRecords->clear();
   delete m_userEquipmentRecords;
+  m_allocatedDlRBs.clear();
 }
 
 void
@@ -153,7 +155,8 @@ GNodeB::DeleteUserEquipment (UserEquipment *UE)
         {
           if (UE->GetTargetNodeRecord() == record)
             {
-              UE->SetTargetNodeRecord (NULL);
+              if((UE->GetIDNetworkNode()/100)!=0) //TODO: CHECK GD ?!?!?!?!? this instruction is dangerous and I don't understand it
+                  UE->SetTargetNodeRecord (NULL);
             }
           delete record;
         }
@@ -224,14 +227,16 @@ GNodeB::UserEquipmentRecord::UserEquipmentRecord ()
     SetHarqManager (nullptr);
 }
 
+//TODO: CHECK GD all the things in destructors should also go into constructors to be properly initialized
 GNodeB::UserEquipmentRecord::~UserEquipmentRecord ()
 {
-  m_cqiFeedback.clear ();
-  m_uplinkChannelStatusIndicator.clear();
-  if (m_harqManager != nullptr)
-    {
-      delete m_harqManager;
-    }
+    m_cqiFeedback.clear ();
+    m_uplinkChannelStatusIndicator.clear();
+    if (m_harqManager != nullptr)
+        delete m_harqManager;
+    m_channelMatrix.clear();
+    m_pmiFeedback.clear();
+    m_uplinkChannelMatricesIndicator.clear();
 }
 
 GNodeB::UserEquipmentRecord::UserEquipmentRecord (UserEquipment *UE)
@@ -509,6 +514,11 @@ GNodeB::SetULScheduler (ULSchedulerType type)
       scheduler = new nbRoundRobinUplinkPacketScheduler (mac);
       mac->SetUplinkPacketScheduler (scheduler);
       break;
+    case GNodeB::ULScheduler_TYPE_PRIORITY_SCHED:
+      scheduler = new PriorityUplinkPacketScheduler (mac);
+      mac->SetUplinkPacketScheduler (scheduler);
+      break;
+
 
     default:
       cout << "ERROR: invalid scheduler type" << endl;
@@ -575,4 +585,36 @@ GNodeB::Print (void)
       cout << "\t\t idUE = " << record->GetUE ()->
                 GetIDNetworkNode () << endl;
     }
+}
+
+void
+GNodeB::SetAllocatedDlRBs(vector<int> allocatedDlRBs) {
+    m_allocatedDlRBs.clear();
+    m_allocatedDlRBs = allocatedDlRBs;
+}
+
+vector<int>
+GNodeB::GetAllocatedDlRBs(void) {
+    return m_allocatedDlRBs;
+}
+
+
+void
+GNodeB::UserEquipmentRecord::SetUlTxMode(int txMode) {
+    m_UlTxMode = txMode;
+}
+
+int
+GNodeB::UserEquipmentRecord::GetUlTxMode() {
+    return m_UlTxMode;
+}
+
+void
+GNodeB::UserEquipmentRecord::SetUplinkChannelMatricesIndicator (vector< shared_ptr<arma::cx_fmat> > m_fullCsiForUL) {
+    m_uplinkChannelMatricesIndicator = m_fullCsiForUL;
+}
+
+vector< shared_ptr<arma::cx_fmat> >
+GNodeB::UserEquipmentRecord::GetUplinkChannelMatricesIndicator (void) const {
+    return m_uplinkChannelMatricesIndicator;
 }

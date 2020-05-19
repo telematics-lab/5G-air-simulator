@@ -436,3 +436,15 @@ MacQueue::GetByte (int byte)
 
   return maxData;
 }
+
+void
+MacQueue::DropTwinPackets(int bearerID) {
+    double now = Simulator::Init()->Now();
+    
+    while (true && GetPacketQueue()->size() > 0) {
+        int size = GetPacketQueue ()->begin ()->GetSize() - GetPacketQueue ()->begin ()->GetFragmentOffset();
+        UpdateQueueSize (-size);
+        Dequeue ();
+    }
+}
+

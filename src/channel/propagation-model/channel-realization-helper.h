@@ -47,8 +47,9 @@ static ChannelRealization* CreateChannelRealization (NetworkNode* src, NetworkNo
     }
   else
     {
+      //TODO: CHECK GD i guess we should try to make this part more robust, i.e., enable the  3D model if and only if uplink mimo is enabled
       ChannelRealization* c =
-        new ChannelRealization (src, dst, ChannelRealization::CHANNEL_MODEL_MACROCELL_URBAN);
+        new ChannelRealization (src, dst, ChannelRealization::CHANNEL_MODEL_MACROCELL_URBAN_IMT_3D);
       return c;
     }
 

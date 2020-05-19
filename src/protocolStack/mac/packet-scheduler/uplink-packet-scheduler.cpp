@@ -98,7 +98,7 @@ DEBUG_LOG_END
           user->m_listOfAllocatedRBs.clear ();
           user->m_selectedMCS = 0;
           user->m_transmittedData = 0;
-          user->m_channelContition = record->GetCQI ();
+          user->m_channelCondition = record->GetCQI ();
           user->m_averageSchedulingGrant = record->GetSchedulingGrants ();
 
 DEBUG_LOG_START_1(SIM_ENV_SCHEDULER_DEBUG)
@@ -211,7 +211,7 @@ DEBUG_LOG_END
           int availableRBs = nbOfRBs - s;
           AMCModule* amc = scheduledUser->m_userToSchedule->GetProtocolStack()->GetMacEntity()->GetAmcModule();
           vector<double> sinrs;
-          for (auto c : scheduledUser->m_channelContition)
+          for (auto c : scheduledUser->m_channelCondition)
             {
               sinrs.push_back (amc->GetSinrFromCQI (c));
             }

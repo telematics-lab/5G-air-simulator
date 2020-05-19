@@ -30,6 +30,8 @@
 #include "../flows/application/VoIP.h"
 #include "../flows/application/TraceBased.h"
 #include "../load-parameters.h"
+#include "../flows/application/TwinVoIP.h"
+#include "../flows/application/TwinCBR.h"
 
 FlowsManager* FlowsManager::ptr=nullptr;
 
@@ -86,3 +88,129 @@ FlowsManager::CreateApplication (int applicationID,
 
 }
 
+Application*
+FlowsManager::CreateApplication (int applicationID,
+                                  NetworkNode* src, NetworkNode* dst,
+                                  int srcPort, int destPort,
+                                  TransportProtocol::TransportProtocolType protocol,
+                                  Application::ApplicationType type,
+                                  QoSParameters* qos, bool state, double stateduration, double endstate, double time)
+                                 
+{
+    
+    Application* app;
+    
+    if (type == Application::APPLICATION_TYPE_CBR)
+    {
+        app = new CBR ();
+    }
+    if (type == Application::APPLICATION_TYPE_INFINITE_BUFFER)
+    {
+        app = new InfiniteBuffer ();
+    }
+    if (type == Application::APPLICATION_TYPE_VOIP)
+    {
+        app = new VoIP ();
+    }
+    if (type == Application::APPLICATION_TYPE_TRACE_BASED)
+    {
+        app = new TraceBased ();
+    }
+    if (type == Application::APPLICATION_TYPE_TWIN_VOIP)
+    {
+        app = new TwinVoIP ();
+    }
+    if (type == Application::APPLICATION_TYPE_TWIN_CBR)
+    {
+        app = new TwinCBR ();
+    }
+    
+    app->SetApplicationID (applicationID);
+    app->SetSource (src);
+    app->SetDestination (dst);
+    app->SetSourcePort (srcPort);
+    app->SetDestinationPort (destPort);
+    
+    ClassifierParameters *cp = new ClassifierParameters (src->GetIDNetworkNode(),
+                                                         dst->GetIDNetworkNode(),
+                                                         srcPort,
+                                                         destPort,
+                                                         protocol);
+    
+    app->SetClassifierParameters (cp);
+    
+    
+    app->SetQoSParameters (qos);
+    
+    app->SetState(state);
+    app->SetStateDuration(stateduration);
+    app->SetEndState(endstate);
+    app->SetLastPacketCreationTime(time);
+    
+    return app;
+    
+}
+                                 
+                                 
+                                 //TODO: CHECK GD
+                                 Application*
+                                 FlowsManager::CreateApplication (int applicationID,
+                                                                  NetworkNode* src, NetworkNode* dst,
+                                                                  int srcPort, int destPort,
+                                                                  TransportProtocol::TransportProtocolType protocol,
+                                                                  Application::ApplicationType type,
+                                                                  QoSParameters* qos,double time)
+{
+    
+    Application* app;
+    
+    if (type == Application::APPLICATION_TYPE_CBR)
+    {
+        app = new CBR ();
+    }
+    if (type == Application::APPLICATION_TYPE_INFINITE_BUFFER)
+    {
+        app = new InfiniteBuffer ();
+    }
+    if (type == Application::APPLICATION_TYPE_VOIP)
+    {
+        app = new VoIP ();
+    }
+    if (type == Application::APPLICATION_TYPE_TRACE_BASED)
+    {
+        app = new TraceBased ();
+    }
+    if (type == Application::APPLICATION_TYPE_TWIN_VOIP)
+    {
+        app = new TwinVoIP ();
+    }
+    if (type == Application::APPLICATION_TYPE_TWIN_CBR)
+    {
+        app = new TwinCBR ();
+    }
+    app->SetApplicationID (applicationID);
+    app->SetSource (src);
+    app->SetDestination (dst);
+    app->SetSourcePort (srcPort);
+    app->SetDestinationPort (destPort);
+    
+    ClassifierParameters *cp = new ClassifierParameters (src->GetIDNetworkNode(),
+                                                         dst->GetIDNetworkNode(),
+                                                         srcPort,
+                                                         destPort,
+                                                         protocol);
+    
+    app->SetClassifierParameters (cp);
+    
+    
+    app->SetQoSParameters (qos);
+    
+    app->SetLastPacketCreationTime(time);
+    
+    
+    // app->SetStartTime (startTime);
+    //app->SetStopTime (startTime + duration);
+    
+    return app;
+    
+}

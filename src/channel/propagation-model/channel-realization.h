@@ -100,6 +100,8 @@ public:
   bool hasFastFading();
   void enableFastFading();
   void disableFastFading();
+    
+  double GetBeamformingGainForBeamShape(int path);
 
 protected:
   double m_penetrationLoss;

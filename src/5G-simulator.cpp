@@ -57,6 +57,12 @@
 #include "scenarios/test-unicast.h"
 #include "scenarios/nb-cell-test.h"
 
+//TODO: CHECK GD are you sure do you need all these scenarios? try to rename them removing the reference to f5g
+#include "scenarios/f5g-uc1-thesis.h"
+#include "scenarios/single-cell-without-interference-uplink.h"
+#include "scenarios/f5g-handover.h"
+#include "scenarios/f5g-handover-scenario3.h"
+
 #include "utility/help.h"
 #include <iostream>
 #include <queue>
@@ -70,114 +76,130 @@ std::mt19937 commonGen(time(NULL));
 int
 main (int argc, char *argv[])
 {
-
-  // Raise a floating point error when some computation gives a NaN as result
-//  feenableexcept(FE_ALL_EXCEPT & ~FE_INEXACT);
-
-  if (argc > 1)
+    
+    // Raise a floating point error when some computation gives a NaN as result
+    //  feenableexcept(FE_ALL_EXCEPT & ~FE_INEXACT);
+    
+    if (argc > 1)
     {
-
-      /* Help */
-      if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "-H") || !strcmp(argv[1],
-          "--help") || !strcmp(argv[1], "--Help"))
+        
+        /* Help */
+        if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "-H") || !strcmp(argv[1],
+                                                                        "--help") || !strcmp(argv[1], "--Help"))
         {
-          Help ();
-          return 0;
+            Help ();
+            return 0;
         }
-
-      /* Run simple scenario */
-      if (strcmp(argv[1], "Simple")==0)
+        
+        /* Run simple scenario */
+        if (strcmp(argv[1], "Simple")==0)
         {
-          Simple ();
+            Simple ();
         }
-
-
-
-      /* Run more complex scenarios */
-      if (strcmp(argv[1], "SingleCell")==0)
+        
+        
+        
+        /* Run more complex scenarios */
+        if (strcmp(argv[1], "SingleCell")==0)
         {
-          SingleCellWithoutInterference (argc, argv);
+            SingleCellWithoutInterference (argc, argv);
         }
-      if (strcmp(argv[1], "SingleCellWithI")==0)
+        if (strcmp(argv[1], "SingleCellWithI")==0)
         {
-          SingleCellWithInterference (argc, argv);
+            SingleCellWithInterference (argc, argv);
         }
-      if (strcmp(argv[1], "MultiCell")==0)
+        if (strcmp(argv[1], "MultiCell")==0)
         {
-          MultiCell (argc, argv);
+            MultiCell (argc, argv);
         }
-      if (strcmp(argv[1], "SingleCellWithFemto")==0)
+        if (strcmp(argv[1], "SingleCellWithFemto")==0)
         {
-          SingleCellWithFemto(argc, argv);
+            SingleCellWithFemto(argc, argv);
         }
-      if (strcmp(argv[1], "SingleCellWithStreets")==0)
+        if (strcmp(argv[1], "SingleCellWithStreets")==0)
         {
-          SingleCellWithStreets (argc, argv);
+            SingleCellWithStreets (argc, argv);
         }
-      if (strcmp(argv[1], "MMC1")==0)
+        if (strcmp(argv[1], "MMC1")==0)
         {
-          MMC1 (argc, argv);
+            MMC1 (argc, argv);
         }
-      if (strcmp(argv[1], "nbCell")==0)
+        if (strcmp(argv[1], "nbCell")==0)
         {
-          nbCell (argc, argv);
+            nbCell (argc, argv);
         }
-      if (strcmp(argv[1], "test-tri-sector")==0)
+        if (strcmp(argv[1], "test-tri-sector")==0)
         {
-          TestTriSector (argc, argv);
+            TestTriSector (argc, argv);
         }
-      if (strcmp(argv[1], "test-multi-cell-tri-sector")==0)
+        if (strcmp(argv[1], "test-multi-cell-tri-sector")==0)
         {
-          TestMultiCellTriSector (argc, argv);
+            TestMultiCellTriSector (argc, argv);
         }
-      if (strcmp(argv[1], "itu-calibration")==0)
+        if (strcmp(argv[1], "itu-calibration")==0)
         {
-          ItuCalibration (argc, argv);
+            ItuCalibration (argc, argv);
         }
-      if (strcmp(argv[1], "urban-macrocell-itu")==0)
+        if (strcmp(argv[1], "urban-macrocell-itu")==0)
         {
-          UrbanMacrocellItu (argc, argv);
+            UrbanMacrocellItu (argc, argv);
         }
-      if (strcmp(argv[1], "rural-macrocell-itu")==0)
+        if (strcmp(argv[1], "rural-macrocell-itu")==0)
         {
-          RuralMacrocellItu (argc, argv);
+            RuralMacrocellItu (argc, argv);
         }
-      if (strcmp(argv[1], "test-multicast")==0)
+        if (strcmp(argv[1], "test-multicast")==0)
         {
-          TestMulticast (argc, argv);
+            TestMulticast (argc, argv);
         }
-      if (strcmp(argv[1], "test-mbsfn")==0)
+        if (strcmp(argv[1], "test-mbsfn")==0)
         {
-          TestMbsfn (argc, argv);
+            TestMbsfn (argc, argv);
         }
-      if (strcmp(argv[1], "test-unicast")==0)
+        if (strcmp(argv[1], "test-unicast")==0)
         {
-          TestUnicast (argc, argv);
+            TestUnicast (argc, argv);
         }
-      if (strcmp(argv[1], "f5g-uc1")==0)
+        if (strcmp(argv[1], "f5g-uc1")==0)
         {
-          f5g_50MbpsEverywhere (argc, argv);
+            f5g_50MbpsEverywhere (argc, argv);
         }
-      if (strcmp(argv[1], "f5g-uc2")==0)
+        if (strcmp(argv[1], "f5g-uc2")==0)
         {
-          f5g_HighSpeedTrain (argc, argv);
+            f5g_HighSpeedTrain (argc, argv);
         }
-      if (strcmp(argv[1], "f5g-uc6")==0)
+        if (strcmp(argv[1], "f5g-uc6")==0)
         {
-          f5g_BroadcastServices (argc, argv);
+            f5g_BroadcastServices (argc, argv);
         }
-      if (strcmp(argv[1], "f5g-demo1")==0)
+        if (strcmp(argv[1], "f5g-demo1")==0)
         {
-          f5g_demo1 (argc, argv);
+            f5g_demo1 (argc, argv);
         }
-      if (strcmp(argv[1], "nbCellTest")==0)
+        if (strcmp(argv[1], "nbCellTest")==0)
         {
-          nbCellTest (argc, argv);
+            nbCellTest (argc, argv);
+        }
+        if (strcmp(argv[1], "SingleCellUplink")==0)
+        {
+            SingleCellWithoutInterferenceUplink (argc, argv);
+        }
+        if (strcmp(argv[1], "f5g-uc1-thesis")==0)
+        {
+            f5g_50MbpsEverywhereThesis (argc, argv);
+        }
+        if (strcmp(argv[1], "f5g-uc1-handover")==0)
+        {
+            f5g_50MbpsEverywhereHandover (argc, argv);
+        }
+        if (strcmp(argv[1], "f5g-uc1-handover-scenario3")==0)
+        {
+            f5g_50MbpsEverywhereHandoverScenario3 (argc, argv);
         }
     }
-  else
+    else
     {
-      Help ();
-      return 0;
+        Help ();
+        return 0;
     }
 }

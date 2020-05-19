@@ -54,7 +54,7 @@ RoundRobinUplinkPacketScheduler::ComputeSchedulingMetric (UserToSchedule* user, 
 {
   double metric;
 
-  int channelCondition = user->m_channelContition.at (subchannel);
+  int channelCondition = user->m_channelCondition.at (subchannel);
   AMCModule* amc = user->m_userToSchedule->GetProtocolStack()->GetMacEntity()->GetAmcModule();
   double spectralEfficiency = amc->GetSinrFromCQI (channelCondition);
 
@@ -107,7 +107,7 @@ DEBUG_LOG_END
       vector<double> sinrs;
       for (int i = 0; i < nbPrbToAssign; i++)
         {
-          double chCondition = scheduledUser->m_channelContition.at (s+i);
+          double chCondition = scheduledUser->m_channelCondition.at (s+i);
           double sinr = chCondition;
           sinrs.push_back (sinr);
           scheduledUser->m_listOfAllocatedRBs.push_back (s+i);

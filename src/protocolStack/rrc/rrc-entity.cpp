@@ -29,6 +29,10 @@
 #include "../../load-parameters.h"
 #include "../../device/NetworkNode.h"
 #include "ho/handover-entity.h"
+#include"../../flows/application/Application.h"
+#include"../../flows/MacQueue.h"
+#include "../../device/GNodeB.h"
+#include "../../device/UserEquipment.h"
 
 RrcEntity::RrcEntity ()
 {
@@ -64,9 +68,40 @@ RrcEntity::GetDevice ()
 }
 
 RrcEntity::RadioBearersContainer*
-RrcEntity::GetRadioBearerContainer (void)
-{
-  return m_bearers;
+RrcEntity::GetRadioBearerContainer (void) {
+    //TODO: CHECK GD: delete italian comments
+    /*
+     * Sort the radio bearers basing on the rtts of the packets in the relative queues.
+     * Packets in the relative queues are ordered basing on their own rtts.
+     * See MacQueue::GetSortedPacketQueue()
+     */
+    RadioBearer* temp;
+    int min;
+    //TODO: CHECK GD: ERROR: THIS IS A BIG MISTAKE
+    // GetDevice returns a NetworkNode because the RRC entity exists for both GNBs and UEs.
+    // What happens here? why the return type of GetDevice is always casted to UserEquipment* ?
+    // The condition of the if is wrong.
+//    I guess m_ulSchedType should go inside the mac entity, scheduling is a mac feature
+//    I commented everything for compiling
+    
+    //if(((UserEquipment*) GetDevice())->GetTargetNode()->m_ulSchedType == 5) {     //sort the bearers if priority scheduler is active
+//        for(int i=0; i<((int)m_bearers->size())-1; i++) {
+//            min = i;
+//            for(int j=i+1; j<(int)m_bearers->size(); j++) {
+//                if(!(m_bearers->at(j)->GetMacQueue()->IsEmpty()) && !(m_bearers->at(min)->GetMacQueue()->IsEmpty())) {
+//                    double rtts1 = m_bearers->at(j)->GetMacQueue()->Peek().m_packet->GetRtts();
+//                    double rtts2 = m_bearers->at(min)->GetMacQueue()->Peek().m_packet->GetRtts();
+//                    if(rtts1< rtts2) //cambiare questa condizione per invertire l'ordine
+//                        min = j;
+//                }
+//
+//            }
+//            temp=m_bearers->at(min);
+//            m_bearers->at(min)=m_bearers->at(i);
+//            m_bearers->at(i)=temp;
+//        }
+//    //}
+    return m_bearers;
 }
 
 RrcEntity::RadioBearersSinkContainer*
@@ -89,17 +124,31 @@ DEBUG_LOG_END
 void
 RrcEntity::DelRadioBearer (RadioBearer* bearer)
 {
-  RadioBearersContainer* newContainer = new RadioBearersContainer ();
-  for (auto b : *GetRadioBearerContainer ())
-    {
-      if (b->GetRlcEntity ()->GetRlcEntityIndex () != bearer->GetRlcEntity ()->GetRlcEntityIndex ())
-        {
-          newContainer->push_back (b);
-        }
+    //TODO: CHECK GD I TRIED to rewrite this method - check if it works! I guess it can be further improved (the if could be moved inside for)
+    RadioBearersContainer* newContainer = new RadioBearersContainer ();
+    UserEquipment* ue;
+    if(bearer->GetSource()->GetNodeType()==NetworkNode::TYPE_GNODEB || bearer->GetSource()->GetNodeType()==NetworkNode::TYPE_GW)
+        ue = (UserEquipment*) bearer->GetDestination();
+    else if (bearer->GetSource()->GetNodeType()==NetworkNode::TYPE_UE)
+        ue = (UserEquipment*) bearer->GetSource();
+    else
+        cout<< "ERROR" ;
+        exit(1);
+    
+    if (ue->IsTwin()) {
+        for (auto b : *GetRadioBearerContainer ())
+            if (b->GetDestination()->GetIDNetworkNode() != bearer->GetDestination()->GetIDNetworkNode())
+                newContainer->push_back (b);
     }
-  m_bearers->clear ();
-  delete m_bearers;
-  m_bearers = newContainer;
+    else {
+        for (auto b : *GetRadioBearerContainer ())
+            if (b->GetRlcEntity ()->GetRlcEntityIndex () != bearer->GetRlcEntity ()->GetRlcEntityIndex ())
+                newContainer->push_back (b);
+    }
+
+m_bearers->clear ();
+delete m_bearers;
+m_bearers = newContainer;
 }
 
 void
@@ -192,4 +241,18 @@ HandoverEntity*
 RrcEntity::GetHandoverEntity (void)
 {
   return m_handover;
+}
+
+void
+RrcEntity::CopyRadioBearer (RadioBearer* bearer) {
+    RadioBearersContainer* newContainer = new RadioBearersContainer();
+    
+    for(auto b : *GetRadioBearerContainer())
+        if(b->GetDestination()==bearer->GetDestination())
+            newContainer->push_back(b);
+    
+    newContainer->push_back(bearer);
+    m_bearers->clear();
+    delete m_bearers;
+    m_bearers= newContainer;
 }

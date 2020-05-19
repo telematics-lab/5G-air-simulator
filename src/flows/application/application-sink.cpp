@@ -111,6 +111,21 @@ ApplicationSink::Receive (Packet* p)
         cout << " FTP";
         break;
       }
+    case Application::APPLICATION_TYPE_REFERENCESYMBOLSFORULMIMO:
+    {
+        cout << " REF SYMS FOR UL MIMO ";
+        break;
+    }
+    case Application::APPLICATION_TYPE_TWIN_VOIP:
+    {
+        cout << " TVOIP";
+        break;
+    }
+    case Application::APPLICATION_TYPE_TWIN_CBR:
+        {
+            cout << " TCBR";
+            break;
+        }
     default:
       {
         cout << " UNDEFINED";
@@ -121,6 +136,7 @@ ApplicationSink::Receive (Packet* p)
   double delay = ((Simulator::Init()->Now() *10000) - (p->GetTimeStamp () *10000)) /10000;
   if (delay < 0.000001) delay = 0.000001;
 
+  //TODO: CHECK GD (in your code the output was changed -> we can't do this -> verify everything works as intended with this output)
   cout << " ID " << p->GetID ()
        << " B " << m_sourceApplication->GetApplicationID ()
        << " SIZE " << p->GetPacketTags ()->GetApplicationSize ()

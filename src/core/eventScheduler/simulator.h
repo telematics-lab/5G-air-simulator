@@ -75,6 +75,8 @@ public:
   void Run (void);
   void Stop (void);
   void SetStop (double time);
+  
+  bool GetStop(void);
 
   int GetUID (void);
 

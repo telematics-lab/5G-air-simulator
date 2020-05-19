@@ -367,11 +367,11 @@ DEBUG_LOG_END
   m_macEntity->GetDevice()->GetPhy()->SendIdealControlMessage(msg4);
 }
 
-
+//TODO: CHECK GD why in your code this method always returned true?!
 bool
 GnbEnhancedRandomAccess::isRachOpportunity()
 {
-  int currentTTI = FrameManager::Init()->GetTTICounter();
+  int currentTTI = (int) FrameManager::Init()->GetTTICounter();
   if (m_RBsReservedForRach.elementsExist(currentTTI))
     {
       return true;

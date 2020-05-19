@@ -53,7 +53,7 @@ EnhancedUplinkPacketScheduler::ComputeSchedulingMetric (UserToSchedule* user, in
 {
   double metric;
 
-  int channelCondition = user->m_channelContition.at (subchannel);
+  int channelCondition = user->m_channelCondition.at (subchannel);
   AMCModule* amc = user->m_userToSchedule->GetProtocolStack()->GetMacEntity()->GetAmcModule();
   double spectralEfficiency = GetMacEntity ()->GetAmcModule ()->GetSinrFromCQI (channelCondition);
 
@@ -118,7 +118,7 @@ DEBUG_LOG_END
       AMCModule *amc = scheduledUser->m_userToSchedule->GetProtocolStack()->GetMacEntity()->GetAmcModule();
 
       vector<double> sinrs;
-      for (auto c : scheduledUser->m_channelContition)
+      for (auto c : scheduledUser->m_channelCondition)
         {
           //cout << c <<" ";
           sinrs.push_back (amc->GetSinrFromCQI (c));

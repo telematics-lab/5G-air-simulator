@@ -40,6 +40,7 @@
 #include "../load-parameters.h"
 #include "../protocolStack/mac/random-access/ue-enhanced-random-access.h"
 #include "../protocolStack/mac/ue-mac-entity.h"
+#include "../phy/ue-phy.h"
 
 
 RadioBearer::RadioBearer()
@@ -358,9 +359,11 @@ DEBUG_LOG_END
 
   // send scheduling request if the source is a UE
   NetworkNode* src = GetSource();
-  if (src->GetNodeType() == NetworkNode::TYPE_UE)
-    {
+  if (src->GetNodeType() == NetworkNode::TYPE_UE &&
+      (src->GetNodeState()==NetworkNode::STATE_ACTIVE||src->GetNodeState()==NetworkNode::STATE_IDLE)) {
       UserEquipment* ue = (UserEquipment*)src;
+      UePhy* uePhy = (UePhy*) ue->GetPhy();
+      uePhy->SetTxSignalForReferenceSymbols();
       ue->GetMacEntity()->SendSchedulingRequest();
     }
 

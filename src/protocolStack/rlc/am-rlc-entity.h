@@ -60,6 +60,8 @@ public:
   void CheckForDropPackets (double maxDelay, int bearerID);
 
   int GetSizeOfUnaknowledgedAmd (void);
+  
+  void DropTwinPackets(int bearerID);
 
 private:
   AmStateVariables* m_amStateVariables;

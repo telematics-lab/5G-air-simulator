@@ -33,7 +33,9 @@
 #include "../../core/idealMessages/ideal-control-messages.h"
 #include "../../load-parameters.h"
 
-#define MAX_AMD_RETX 5
+
+//TODO: CHECK GD Before there was 20, but it cannot be set. Verify 16 is sufficient
+#define MAX_AMD_RETX 16 // 3GPP 38.331 maxRetxThreshold = 1, 2, 3, 4, 6, 8, 16, or 32
 
 AmRlcEntity::AmRlcEntity()
 {
@@ -234,7 +236,8 @@ DEBUG_LOG_END
               {
                 cout << "TX AM_RLC SIZE " << p->GetSize () <<
                 " B " << GetRlcEntityIndex () <<
-                " PDU_SN " << p->GetRLCHeader ()->GetRlcPduSequenceNumber() << endl;
+                " PDU_SN " << p->GetRLCHeader ()->GetRlcPduSequenceNumber() <<
+                " T " << Simulator::Init()->Now() << endl;
               }
               
               pb->AddPacket (p);
@@ -270,7 +273,8 @@ DEBUG_LOG_END
               {
                 cout << "TX AM_RLC SIZE " << p1->GetSize () <<
                 " B " << GetRlcEntityIndex () <<
-                " PDU_SN " << p1->GetRLCHeader ()->GetRlcPduSequenceNumber() << endl;
+                " PDU_SN " << p1->GetRLCHeader ()->GetRlcPduSequenceNumber() <<
+                " T " << Simulator::Init()->Now() << endl;
               }
               
               pb->AddPacket (p1->Copy ());
@@ -773,7 +777,8 @@ DEBUG_LOG_END
                     cout << " UNKNOW";
 
                   cout << " ID "<< amdRecord->m_packet->GetID()
-                            << " B " << GetRlcEntityIndex ();
+                       << " B " << GetRlcEntityIndex ()
+                       << " T " << now;
                   if (amdRecord->m_packet->GetPacketTags() != nullptr
                       && amdRecord->m_packet->GetPacketTags()->GetApplicationType() ==
                       PacketTAGs::APPLICATION_TYPE_TRACE_BASED)
@@ -811,4 +816,29 @@ AmRlcEntity::GetSizeOfUnaknowledgedAmd (void)
       size += amdRecord->m_packet->GetSize () + 5; //add also MAC and CRC overhead
     }
   return size;
+}
+
+void
+AmRlcEntity::DropTwinPackets(int bearerID) {
+    DEBUG_LOG_START_1(SIM_ENV_RLC_DEBUG)
+    cout << "AmRlcEntity::DropPackets " << endl;
+    PrintSentAMDs ();
+    DEBUG_LOG_END
+    
+    int currentpacket = -1;
+    
+    vector <AmdRecord*> *newAmdlist = new vector <AmdRecord*> ();
+    for (auto amdRecord : *m_sentAMDs) {
+        // amdRecord->m_packet-
+        /*  if (currentpacket != amdRecord->m_packet->GetID ())
+         {
+         currentpacket = amdRecord->m_packet->GetID ();
+         }*/
+        delete amdRecord;
+        // newAmdlist->push_back (amdRecord);
+        
+    }
+    m_sentAMDs->clear();
+    delete m_sentAMDs;
+    m_sentAMDs = newAmdlist;
 }

@@ -16,42 +16,43 @@
  * You should have received a copy of the GNU General Public License
  * along with 5G-air-simulator; if not, see <http://www.gnu.org/licenses/>.
  *
- * Author: Telematics Lab <telematics-dev@poliba.it>
+ * Author: Gabriele Roncella <gabriele.roncella@student.unisi.it>
+ * Author: Dinesh Tamang <dinesh.tamang@student.unisi.it>
  */
 
 
-#ifndef HANDOVERENTITY_H_
-#define HANDOVERENTITY_H_
+#ifndef REFERENCESYMBOLSFORULMIMO_H_
+#define REFERENCESYMBOLSFORULMIMO_H_
 
-class NetworkNode;
-class UserEquipment;
-class HoManager;
+#include "Application.h"
 
-class HandoverEntity
+class ReferenceSymbolsForUlMimo : public Application
 {
 public:
-  HandoverEntity();
-  virtual ~HandoverEntity();
-
-  void SetDevice (NetworkNode* d);
-  NetworkNode* GetDevice ();
-
-  void SetHoManager (HoManager *h);
-  HoManager* GetHoManager (void);
-
-  void SetDetachTime (double t);
-  double GetDetachTime (void);
-
-  bool CheckHandoverNeed (UserEquipment* ue);
-
-  // TODO: CHECK GD this methods are inside the managers where they should be
-  // bool CheckDetachTimeForTwin(UserEquipment* twin);
-  // void CalculatePower(UserEquipment* ue);
-
+    ReferenceSymbolsForUlMimo();
+    virtual ~ReferenceSymbolsForUlMimo() = default;
+    
+    virtual void DoStart (void);
+    virtual void DoStop (void);
+    
+    void
+    ScheduleTransmit (double time);
+    void
+    Send (void);
+    
+    void
+    SetSize(int size);
+    int
+    GetSize (void) const;
+    void
+    SetInterval(double interval);
+    double
+    GetInterval (void) const;
+    
 private:
-  NetworkNode* m_device;
-  HoManager* m_hoManager;
-  double m_detachTime;
+    
+    double m_interval;
+    int m_size;
 };
 
-#endif /* HANDOVERENTITY_H_ */
+#endif /* REFERENCESYMBOLSFORULMIMO_H_ */

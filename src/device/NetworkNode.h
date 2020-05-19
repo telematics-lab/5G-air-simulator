@@ -116,6 +116,8 @@ public:
 
   void SendPacketBurst (shared_ptr<PacketBurst> p);
   void ReceivePacketBurst (shared_ptr<PacketBurst> p);
+    
+  int m_ulSchedType; //TODO: CHECK GD why in this class? btw it should be private and you need a getter method
 };
 
 

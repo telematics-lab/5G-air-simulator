@@ -35,6 +35,8 @@
 #include "../utility/GaussianRandomVariable.h"
 #include "../core/cartesianCoodrdinates/CartesianCoordinates.h"
 #include "../componentManagers/FrameManager.h"
+#include "ue-phy.h"
+#include<map>
 
 Interference::Interference()
 {
@@ -54,282 +56,282 @@ Interference::Interference()
   };
 }
 
-double
-Interference::ComputeInterference (UserEquipment *ue, bool MBSFNConstructiveInterference)
-{
-  GNodeB *node;
-
-  double interference = 0;
-  int idCellPrec;
-  bool oldLosType;
-  double oldShadowing = 0;
-
-  int servingCellId = ue->GetTargetNode ()->GetCell()->GetIdCell();
-  ChannelRealization* target_c_dl;
-  if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
-    {
-      target_c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlMcChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
-    }
-  else
-    {
-      target_c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
-    }
-
-  //cout << "Compute interference for UE " << ue->GetIDNetworkNode () << " ,target node " << ue->GetTargetNode ()->GetIDNetworkNode ()<< endl;
-
-  for (auto node : *NetworkManager::Init ()->GetGNodeBContainer ())
-    {
-      if (node->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode () &&
-          node->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw () ==
-          ue->GetTargetNode ()->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw ())
-        {
-          int nbTxAntennas = node->GetPhy()->GetTxAntennas();
-//cout << "selecting interference from cell " << node->GetIDNetworkNode() << endl;
-          // XXX Assume the internal cluster of 19 cells is the MBSFN area, and the others create interference
-          if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
-            {
-              if (MBSFNConstructiveInterference==true)
-                {
-                  if (node->GetIDNetworkNode()>=57)
-                    {
-                      continue;
-                    }
-                }
-              else
-                {
-                  if (node->GetIDNetworkNode()<57)
-                    {
-                      continue;
-                    }
-                }
-            }
-          double powerTXForSubBandwidth = 10 * log10 (
-                                            pow (10., (node->GetPhy()->GetTxPower() - 30)/10)
-                                            /
-                                            node->GetPhy()->GetBandwidthManager ()->GetDlSubChannels().size ()
-                                            /
-                                            nbTxAntennas);
-
-          double pathLoss = 0;
-          double shadowing = 0;
-          double penetrationLoss = 0;
-          vector<double> beamFormingGain;
-
-          int idCell = node->GetCell()->GetIdCell();
-
-          ChannelRealization* c_dl;
-          if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
-            {
-              c_dl = node->GetPhy()->GetDlMcChannel()->GetPropagationLossModel ()->GetChannelRealization(node,ue);
-            }
-          else
-            {
-              c_dl = node->GetPhy()->GetDlChannel()->GetPropagationLossModel ()->GetChannelRealization(node,ue);
-            }
-          bool channelRealizationExists;
-          if (c_dl != nullptr)
-            {
-              channelRealizationExists = true;
-            }
-          else
-            {
-              channelRealizationExists = false;
-              if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
-                {
-                  c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlMcChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
-                }
-              else
-                {
-                  c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
-                }
-            }
-
-          if(channelRealizationExists)
-            {
-              // use the same shadowing value for gNBs in the same site
-              if(idCell == servingCellId)
-                {
-                  shadowing = target_c_dl->GetShadowing();
-                  c_dl->SetShadowing(shadowing);
-                }
-              else if (idCell == idCellPrec)
-                {
-                  shadowing = oldShadowing;
-                  c_dl->SetShadowing(shadowing);
-                }
-              else
-                {
-                  shadowing = c_dl->GetShadowing();
-                  oldShadowing = shadowing;
-                }
-
-              pathLoss = c_dl->GetPathLoss();
-
-              // penetration loss is the same from all BS, use value from serving gNB channel realization
-              penetrationLoss = target_c_dl->GetPenetrationLoss();
-
-              for (int i=0; i<nbTxAntennas; i++)
-                {
-                  beamFormingGain.push_back(c_dl->GetBeamformingGain(i));
-                }
-
-              idCellPrec = idCell;
-            }
-          else
-            {
-              // -- INIZIO --
-              double distance = node->GetMobilityModel ()->GetAbsolutePosition ()->GetDistance(ue->GetMobilityModel ()->GetAbsolutePosition());
-              double losProbability, randomProb;
-
-              ChannelRealization* c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
-              ChannelRealization::ChannelModel channelModel = c_dl->GetChannelModel();
-
-              //ChannelRealization::ChannelModel channelModel = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->
-              //GetPropagationLossModel ()->GetChannelRealization (ue->GetTargetNode (), ue)->GetChannelModel();
-
-              int idCell = node->GetCell()->GetIdCell();
-              if (idCell == idCellPrec)
-                {
-                  shadowing = oldShadowing;
-                  m_isLosType = oldLosType;
-                  //cout << "Shadowing :" << shadowing << " " << oldShadowing << endl;
-                  //cout << "LosType :" << m_isLosType << " " << oldLosType << endl;
-                }
-              else
-                {
-
-                  switch(channelModel)
-                    {
-
-                    // These channel models are not handled here, they are declared only to suppress a
-                    // compiler warning. This section is deprecated, a proper ChannelRealization should be
-                    // created for each pair of ue-gnb
-                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_URBAN:
-                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_SUB_URBAN:
-                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_RURAL:
-                    case ChannelRealization::CHANNEL_MODEL_MICROCELL:
-                    case ChannelRealization::CHANNEL_MODEL_FEMTOCELL_URBAN:
-                    case ChannelRealization::CHANNEL_MODEL_3GPP_DOWNLINK:
-                    case ChannelRealization::CHANNEL_MODEL_WINNER_DOWNLINK:
-                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_URBAN_IMT_3D:
-                      cout <<
-                                "Warning: channel model not supported in ComputeInterference(), assuming MACROCELL_URBAN_IMT"
-                                << endl;
-
-                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_URBAN_IMT:
-                      losProbability = (min(18/distance, 1.0) * (1 - exp(-distance/63))) + exp(-distance/63);
-                      randomProb = ((double) rand() / RAND_MAX);
-
-                      if (randomProb <= losProbability)
-                        {
-                          m_isLosType = true;
-                          shadowing = GetGaussianRandomVariable(0,4);
-                        }
-                      else
-                        {
-                          m_isLosType = false;
-                          shadowing = GetGaussianRandomVariable(0,6);
-                        }
-
-                      //cout << "Urban shadowing :" << shadowing << endl;
-                      break;
-
-                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_RURAL_IMT:
-                      losProbability = min(1.00, exp(-(distance-10)/200)); // R1 091320
-                      randomProb = ((double) rand() / RAND_MAX);
-
-                      if (randomProb <= losProbability)
-                        {
-                          m_isLosType = true;
-
-                          double dbp = 2*M_PI * 35 * 1.5 * (800/300); // 2pi * hBS * hUT * (f/c)
-                          if (distance >10 && distance < dbp)
-                            {
-                              shadowing = GetGaussianRandomVariable(0,4);
-                            }
-                          else if (distance > dbp && distance < 10000)
-                            {
-                              shadowing = GetGaussianRandomVariable(0,6);
-                            }
-                        }
-                      else
-                        {
-                          m_isLosType = false;
-                          shadowing = GetGaussianRandomVariable(0,8);
-                        }
-
-                      break;
-
-                    case ChannelRealization::CHANNEL_MODEL_3GPP_CASE1:
-                      shadowing = GetGaussianRandomVariable(0,8);
-
-                    }
-                  //cout << "Celle " << idCell << " " << idCellPrec << " Model: " << channelModel << endl;
-                  idCellPrec = idCell;
-                  oldShadowing = shadowing;
-                  oldLosType = m_isLosType;
-                }
-
-
-              penetrationLoss = c_dl->GetPenetrationLoss();
-              pathLoss = ComputePathLossForInterference (node, ue, /*m_isLosType*/false);
-              // -- FINE --
-            }
-
-          double nodeInterference_db = powerTXForSubBandwidth - shadowing - penetrationLoss - pathLoss; // in dB
-
-          double nodeInterference = 0;
-
-          for (int i=0; i<nbTxAntennas; i++)
-            {
-              nodeInterference += pow(10, (nodeInterference_db + beamFormingGain.at(i))/10);
-            }
-
-          interference += nodeInterference;
-
-
-          /*cout << "\t add interference from gNB " << node->GetIDNetworkNode ()
-              << " " << powerTXForSubBandwidth << " "  << shadowing << " " << penetrationLoss << " " << ComputePathLossForInterference (node, ue, m_isLosType)
-              << " " << nodeInterference_db << " " << nodeInterference
-              << " --> tot: " << interference
-              << endl;*/
-
-        }
-    }
-
-  //cout << "Compute interference for UE " << ue->GetIDNetworkNode () << " ,target node " << ue->GetTargetNode ()->GetIDNetworkNode ()<< endl;
-
-  for (auto henb : *NetworkManager::Init ()->GetHomeGNodeBContainer())
-    {
-      if (henb->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode () &&
-          henb->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw () ==
-          ue->GetTargetNode ()->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw ())
-        {
-          double powerTXForSubBandwidth = 10 * log10 (
-                                            pow (10., (henb->GetPhy()->GetTxPower() - 30)/10)
-                                            /
-                                            henb->GetPhy()->GetBandwidthManager ()->GetDlSubChannels().size ());
-
-
-          //ATTENZIONE double nodeInterference_db = powerTXForSubBandwidth - 10 - ComputePathLossForInterference (henb, ue); // in dB
-          double nodeInterference_db = powerTXForSubBandwidth - ComputePathLossForInterference (henb, ue, m_isLosType); // in dB
-          double nodeInterference = pow(10, nodeInterference_db/10);
-
-          interference += nodeInterference;
-
-          /*
-          cout << "\t add interference from gNB " << node->GetIDNetworkNode ()
-          << " " << powerTXForSubBandwidth << " "  << ComputePathLossForInterference (node, ue)
-          << " " << nodeInterference_db << " " << nodeInterference
-          << " --> tot: " << interference
-          << endl;
-          */
-        }
-    }
-
-  return interference;
-}
-
+//TODO: CHECK GD for the moment i commented the original method, let's discuss interference together when you complete the other TODOS (leave this one)
+//double
+//Interference::ComputeInterference (UserEquipment *ue, bool MBSFNConstructiveInterference)
+//{
+//  GNodeB *node;
+//
+//  double interference = 0;
+//  int idCellPrec;
+//  bool oldLosType;
+//  double oldShadowing = 0;
+//
+//  int servingCellId = ue->GetTargetNode ()->GetCell()->GetIdCell();
+//  ChannelRealization* target_c_dl;
+//  if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
+//    {
+//      target_c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlMcChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+//    }
+//  else
+//    {
+//      target_c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+//    }
+//
+//  //cout << "Compute interference for UE " << ue->GetIDNetworkNode () << " ,target node " << ue->GetTargetNode ()->GetIDNetworkNode ()<< endl;
+//
+//  for (auto node : *NetworkManager::Init ()->GetGNodeBContainer ())
+//    {
+//      if (node->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode () &&
+//          node->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw () ==
+//          ue->GetTargetNode ()->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw ())
+//        {
+//          int nbTxAntennas = node->GetPhy()->GetTxAntennas();
+////cout << "selecting interference from cell " << node->GetIDNetworkNode() << endl;
+//          // XXX Assume the internal cluster of 19 cells is the MBSFN area, and the others create interference
+//          if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
+//            {
+//              if (MBSFNConstructiveInterference==true)
+//                {
+//                  if (node->GetIDNetworkNode()>=57)
+//                    {
+//                      continue;
+//                    }
+//                }
+//              else
+//                {
+//                  if (node->GetIDNetworkNode()<57)
+//                    {
+//                      continue;
+//                    }
+//                }
+//            }
+//          double powerTXForSubBandwidth = 10 * log10 (
+//                                            pow (10., (node->GetPhy()->GetTxPower() - 30)/10)
+//                                            /
+//                                            node->GetPhy()->GetBandwidthManager ()->GetDlSubChannels().size ()
+//                                            /
+//                                            nbTxAntennas);
+//
+//          double pathLoss = 0;
+//          double shadowing = 0;
+//          double penetrationLoss = 0;
+//          vector<double> beamFormingGain;
+//
+//          int idCell = node->GetCell()->GetIdCell();
+//
+//          ChannelRealization* c_dl;
+//          if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
+//            {
+//              c_dl = node->GetPhy()->GetDlMcChannel()->GetPropagationLossModel ()->GetChannelRealization(node,ue);
+//            }
+//          else
+//            {
+//              c_dl = node->GetPhy()->GetDlChannel()->GetPropagationLossModel ()->GetChannelRealization(node,ue);
+//            }
+//          bool channelRealizationExists;
+//          if (c_dl != nullptr)
+//            {
+//              channelRealizationExists = true;
+//            }
+//          else
+//            {
+//              channelRealizationExists = false;
+//              if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
+//                {
+//                  c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlMcChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+//                }
+//              else
+//                {
+//                  c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+//                }
+//            }
+//
+//          if(channelRealizationExists)
+//            {
+//              // use the same shadowing value for gNBs in the same site
+//              if(idCell == servingCellId)
+//                {
+//                  shadowing = target_c_dl->GetShadowing();
+//                  c_dl->SetShadowing(shadowing);
+//                }
+//              else if (idCell == idCellPrec)
+//                {
+//                  shadowing = oldShadowing;
+//                  c_dl->SetShadowing(shadowing);
+//                }
+//              else
+//                {
+//                  shadowing = c_dl->GetShadowing();
+//                  oldShadowing = shadowing;
+//                }
+//
+//              pathLoss = c_dl->GetPathLoss();
+//
+//              // penetration loss is the same from all BS, use value from serving gNB channel realization
+//              penetrationLoss = target_c_dl->GetPenetrationLoss();
+//
+//              for (int i=0; i<nbTxAntennas; i++)
+//                {
+//                  beamFormingGain.push_back(c_dl->GetBeamformingGain(i));
+//                }
+//
+//              idCellPrec = idCell;
+//            }
+//          else
+//            {
+//              // -- INIZIO --
+//              double distance = node->GetMobilityModel ()->GetAbsolutePosition ()->GetDistance(ue->GetMobilityModel ()->GetAbsolutePosition());
+//              double losProbability, randomProb;
+//
+//              ChannelRealization* c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+//              ChannelRealization::ChannelModel channelModel = c_dl->GetChannelModel();
+//
+//              //ChannelRealization::ChannelModel channelModel = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->
+//              //GetPropagationLossModel ()->GetChannelRealization (ue->GetTargetNode (), ue)->GetChannelModel();
+//
+//              int idCell = node->GetCell()->GetIdCell();
+//              if (idCell == idCellPrec)
+//                {
+//                  shadowing = oldShadowing;
+//                  m_isLosType = oldLosType;
+//                  //cout << "Shadowing :" << shadowing << " " << oldShadowing << endl;
+//                  //cout << "LosType :" << m_isLosType << " " << oldLosType << endl;
+//                }
+//              else
+//                {
+//
+//                  switch(channelModel)
+//                    {
+//
+//                    // These channel models are not handled here, they are declared only to suppress a
+//                    // compiler warning. This section is deprecated, a proper ChannelRealization should be
+//                    // created for each pair of ue-gnb
+//                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_URBAN:
+//                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_SUB_URBAN:
+//                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_RURAL:
+//                    case ChannelRealization::CHANNEL_MODEL_MICROCELL:
+//                    case ChannelRealization::CHANNEL_MODEL_FEMTOCELL_URBAN:
+//                    case ChannelRealization::CHANNEL_MODEL_3GPP_DOWNLINK:
+//                    case ChannelRealization::CHANNEL_MODEL_WINNER_DOWNLINK:
+//                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_URBAN_IMT_3D:
+//                      cout <<
+//                                "Warning: channel model not supported in ComputeInterference(), assuming MACROCELL_URBAN_IMT"
+//                                << endl;
+//
+//                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_URBAN_IMT:
+//                      losProbability = (min(18/distance, 1.0) * (1 - exp(-distance/63))) + exp(-distance/63);
+//                      randomProb = ((double) rand() / RAND_MAX);
+//
+//                      if (randomProb <= losProbability)
+//                        {
+//                          m_isLosType = true;
+//                          shadowing = GetGaussianRandomVariable(0,4);
+//                        }
+//                      else
+//                        {
+//                          m_isLosType = false;
+//                          shadowing = GetGaussianRandomVariable(0,6);
+//                        }
+//
+//                      //cout << "Urban shadowing :" << shadowing << endl;
+//                      break;
+//
+//                    case ChannelRealization::CHANNEL_MODEL_MACROCELL_RURAL_IMT:
+//                      losProbability = min(1.00, exp(-(distance-10)/200)); // R1 091320
+//                      randomProb = ((double) rand() / RAND_MAX);
+//
+//                      if (randomProb <= losProbability)
+//                        {
+//                          m_isLosType = true;
+//
+//                          double dbp = 2*M_PI * 35 * 1.5 * (800/300); // 2pi * hBS * hUT * (f/c)
+//                          if (distance >10 && distance < dbp)
+//                            {
+//                              shadowing = GetGaussianRandomVariable(0,4);
+//                            }
+//                          else if (distance > dbp && distance < 10000)
+//                            {
+//                              shadowing = GetGaussianRandomVariable(0,6);
+//                            }
+//                        }
+//                      else
+//                        {
+//                          m_isLosType = false;
+//                          shadowing = GetGaussianRandomVariable(0,8);
+//                        }
+//
+//                      break;
+//
+//                    case ChannelRealization::CHANNEL_MODEL_3GPP_CASE1:
+//                      shadowing = GetGaussianRandomVariable(0,8);
+//
+//                    }
+//                  //cout << "Celle " << idCell << " " << idCellPrec << " Model: " << channelModel << endl;
+//                  idCellPrec = idCell;
+//                  oldShadowing = shadowing;
+//                  oldLosType = m_isLosType;
+//                }
+//
+//
+//              penetrationLoss = c_dl->GetPenetrationLoss();
+//              pathLoss = ComputePathLossForInterference (node, ue, /*m_isLosType*/false);
+//              // -- FINE --
+//            }
+//
+//          double nodeInterference_db = powerTXForSubBandwidth - shadowing - penetrationLoss - pathLoss; // in dB
+//
+//          double nodeInterference = 0;
+//
+//          for (int i=0; i<nbTxAntennas; i++)
+//            {
+//              nodeInterference += pow(10, (nodeInterference_db + beamFormingGain.at(i))/10);
+//            }
+//
+//          interference += nodeInterference;
+//
+//
+//          /*cout << "\t add interference from gNB " << node->GetIDNetworkNode ()
+//              << " " << powerTXForSubBandwidth << " "  << shadowing << " " << penetrationLoss << " " << ComputePathLossForInterference (node, ue, m_isLosType)
+//              << " " << nodeInterference_db << " " << nodeInterference
+//              << " --> tot: " << interference
+//              << endl;*/
+//
+//        }
+//    }
+//
+//  //cout << "Compute interference for UE " << ue->GetIDNetworkNode () << " ,target node " << ue->GetTargetNode ()->GetIDNetworkNode ()<< endl;
+//
+//  for (auto henb : *NetworkManager::Init ()->GetHomeGNodeBContainer())
+//    {
+//      if (henb->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode () &&
+//          henb->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw () ==
+//          ue->GetTargetNode ()->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw ())
+//        {
+//          double powerTXForSubBandwidth = 10 * log10 (
+//                                            pow (10., (henb->GetPhy()->GetTxPower() - 30)/10)
+//                                            /
+//                                            henb->GetPhy()->GetBandwidthManager ()->GetDlSubChannels().size ());
+//
+//
+//          //ATTENZIONE double nodeInterference_db = powerTXForSubBandwidth - 10 - ComputePathLossForInterference (henb, ue); // in dB
+//          double nodeInterference_db = powerTXForSubBandwidth - ComputePathLossForInterference (henb, ue, m_isLosType); // in dB
+//          double nodeInterference = pow(10, nodeInterference_db/10);
+//
+//          interference += nodeInterference;
+//
+//          /*
+//          cout << "\t add interference from gNB " << node->GetIDNetworkNode ()
+//          << " " << powerTXForSubBandwidth << " "  << ComputePathLossForInterference (node, ue)
+//          << " " << nodeInterference_db << " " << nodeInterference
+//          << " --> tot: " << interference
+//          << endl;
+//          */
+//        }
+//    }
+//
+//  return interference;
+//}
 
 double Interference::ComputeDopplerInterference (int speed /* in km/h */, Phy::WaveformType type)
 {
@@ -377,4 +379,452 @@ double Interference::ComputeDopplerInterference (int speed /* in km/h */, Phy::W
     }
 
   return SIR;
+}
+
+double
+Interference::ComputeInterference (UserEquipment *ue, bool MBSFNConstructiveInterference) {
+    GNodeB *node;
+
+    double interference = 0;
+    int idCellPrec;
+    bool oldLosType;
+    double oldShadowing = 0;
+    vector<int> allocatedRBs = ue->GetTargetNode()->GetAllocatedDlRBs();
+    int servingCellId = ue->GetTargetNode ()->GetCell()->GetIdCell();
+    ChannelRealization* target_c_dl;
+    if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true) {
+        target_c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlMcChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+    }
+    else {
+        target_c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+    }
+
+    //cout << "Compute interference for UE " << ue->GetIDNetworkNode () << " ,target node " << ue->GetTargetNode ()->GetIDNetworkNode ()<< endl;
+
+    for (auto node : *NetworkManager::Init ()->GetGNodeBContainer ()) {
+        if (node->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode ()) {
+            int nbTxAntennas = node->GetPhy()->GetTxAntennas();
+            vector<int> allocated = node->GetAllocatedDlRBs();
+            bool interf=false;
+
+            if(allocated.size()>0&&allocatedRBs.size()>0) {
+                if(allocated.size()>=allocatedRBs.size()) {
+                    if(search(allocated.begin(), allocated.end(), allocatedRBs.begin(), allocatedRBs.end() )!=allocated.end()) {
+                        interf=true;
+                    }
+                }
+                else {
+                    if(search(allocatedRBs.begin(), allocatedRBs.end(), allocated.begin(), allocated.end() )!=allocatedRBs.end()) {
+                        interf=true;
+                    }
+                }
+            }
+            if(interf == true ) {
+
+                if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true) {
+                    if (MBSFNConstructiveInterference==true) {
+                        if (node->GetIDNetworkNode()>=57) {
+                            continue;
+                        }
+                    }
+                    else {
+                        if (node->GetIDNetworkNode()<57) {
+                            continue;
+                        }
+                    }
+                }
+                double powerTXForSubBandwidth = 10 * log10 (
+                        pow (10., (node->GetPhy()->GetTxPower() - 30)/10)
+                        /
+                        node->GetPhy()->GetBandwidthManager ()->GetDlSubChannels().size ()
+                        /
+                        nbTxAntennas);
+
+                double pathLoss = 0;
+                double shadowing = 0;
+                double penetrationLoss = 0;
+                vector<double> beamFormingGain;
+
+                int idCell = node->GetCell()->GetIdCell();
+
+                ChannelRealization* c_dl;
+                if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true) {
+                    c_dl = node->GetPhy()->GetDlMcChannel()->GetPropagationLossModel ()->GetChannelRealization(node,ue);
+                }
+                else {
+                    c_dl = node->GetPhy()->GetDlChannel()->GetPropagationLossModel ()->GetChannelRealization(node,ue);
+                }
+                bool channelRealizationExists;
+                if (c_dl != nullptr) {
+                    channelRealizationExists = true;
+                }
+                else {
+                    channelRealizationExists = false;
+                    if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true) {
+                        c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlMcChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+                    }
+                    else {
+                        c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+                        channelRealizationExists = true;
+                    }
+                }
+
+                if(channelRealizationExists) {
+                    // use the same shadowing value for eNBs in the same site
+                    if(idCell == servingCellId) {
+                        shadowing = target_c_dl->GetShadowing();
+                        c_dl->SetShadowing(shadowing);
+                    }
+                    else if (idCell == idCellPrec) {
+                        shadowing = oldShadowing;
+                        c_dl->SetShadowing(shadowing);
+                    }
+                    else {
+                        shadowing = c_dl->GetShadowing();
+                        oldShadowing = shadowing;
+                    }
+
+                    pathLoss = c_dl->GetPathLoss();
+
+                    // penetration loss is the same from all BS, use value from serving eNB channel realization
+                    penetrationLoss = target_c_dl->GetPenetrationLoss();
+
+                    for (int i=0; i<nbTxAntennas; i++) {
+                        beamFormingGain.push_back(c_dl->GetBeamformingGain(i));
+                    }
+
+                    idCellPrec = idCell;
+                }
+                else {}
+
+                double nodeInterference_db = powerTXForSubBandwidth - shadowing - penetrationLoss - pathLoss; // in dB
+
+                double nodeInterference = 0;
+
+                for (int i=0; i<nbTxAntennas; i++) {
+                    nodeInterference += pow(10, (nodeInterference_db + beamFormingGain.at(i))/10);
+                }
+
+                interference += nodeInterference;
+
+
+                /*cout << "\t add interference from eNB " << node->GetIDNetworkNode ()
+              << " " << powerTXForSubBandwidth << " "  << shadowing << " " << penetrationLoss << " " << ComputePathLossForInterference (node, ue, m_isLosType)
+              << " " << nodeInterference_db << " " << nodeInterference
+              << " --> tot: " << interference
+              << endl;*/
+            }
+        }
+    }
+
+    //cout << "Compute interference for UE " << ue->GetIDNetworkNode () << " ,target node " << ue->GetTargetNode ()->GetIDNetworkNode ()<< endl;
+
+    for (auto henb : *NetworkManager::Init ()->GetHomeGNodeBContainer()) {
+        if (henb->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode () &&
+                henb->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw () ==
+                        ue->GetTargetNode ()->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw ()) {
+            double powerTXForSubBandwidth = 10 * log10 (
+                    pow (10., (henb->GetPhy()->GetTxPower() - 30)/10)
+                    /
+                    henb->GetPhy()->GetBandwidthManager ()->GetDlSubChannels().size ());
+
+
+            //ATTENZIONE double nodeInterference_db = powerTXForSubBandwidth - 10 - ComputePathLossForInterference (henb, ue); // in dB
+            double nodeInterference_db = powerTXForSubBandwidth - ComputePathLossForInterference (henb, ue, m_isLosType); // in dB
+            double nodeInterference = pow(10, nodeInterference_db/10);
+
+            interference += nodeInterference;
+
+            /*
+          cout << "\t add interference from eNB " << node->GetIDNetworkNode ()
+          << " " << powerTXForSubBandwidth << " "  << ComputePathLossForInterference (node, ue)
+          << " " << nodeInterference_db << " " << nodeInterference
+          << " --> tot: " << interference
+          << endl;
+             */
+        }
+    }
+
+    return interference;
+}
+
+
+//TODO: CHECK GD CLEAN THIS METHOD!!!!!!!! What (node->GetIDNetworkNode()>=57) means?!
+
+map<GNodeB*, double>
+Interference::ComputeDownlinkInterference (UserEquipment *ue, bool MBSFNConstructiveInterference) {
+    GNodeB *node;
+    
+    map<GNodeB*, double> interference;
+    double Interference = 0;
+    int idCellPrec;
+    bool oldLosType;
+    double oldShadowing = 0;
+    int servingCellId = ue->GetTargetNode ()->GetCell()->GetIdCell();
+    ChannelRealization* target_c_dl;
+    if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true)
+        target_c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlMcChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+    else
+        target_c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+    
+    //cout << "Compute interference for UE " << ue->GetIDNetworkNode () << " ,target node " << ue->GetTargetNode ()->GetIDNetworkNode ()<< endl;
+    
+    for (auto node : *NetworkManager::Init ()->GetGNodeBContainer ()) {
+        if (node->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode ()) {
+            int nbTxAntennas = node->GetPhy()->GetTxAntennas();
+            if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true) {
+                if (MBSFNConstructiveInterference==true) {
+                    if (node->GetIDNetworkNode()>=57) {
+                        continue;
+                    }
+                }
+                else {
+                    if (node->GetIDNetworkNode()<57) {
+                        continue;
+                    }
+                }
+            }
+            double powerTXForSubBandwidth = 10 * log10 (
+                                                        pow (10., (node->GetPhy()->GetTxPower() - 30)/10)
+                                                        /
+                                                        node->GetPhy()->GetBandwidthManager ()->GetDlSubChannels().size ()
+                                                        /
+                                                        nbTxAntennas);
+            
+            double pathLoss = 0;
+            double shadowing = 0;
+            double penetrationLoss = 0;
+            vector<double> beamFormingGain;
+            
+            int idCell = node->GetCell()->GetIdCell();
+            
+            ChannelRealization* c_dl;
+            if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true) {
+                c_dl = node->GetPhy()->GetDlMcChannel()->GetPropagationLossModel ()->GetChannelRealization(node,ue);
+            }
+            else {
+                c_dl = node->GetPhy()->GetDlChannel()->GetPropagationLossModel ()->GetChannelRealization(node,ue);
+            }
+            bool channelRealizationExists;
+            if (c_dl != nullptr) {
+                channelRealizationExists = true;
+            }
+            else {
+                channelRealizationExists = false;
+                if (FrameManager::Init()->MbsfnEnabled()==true && FrameManager::Init()->isMbsfnSubframe()==true) {
+                    c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlMcChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+                }
+                else {
+                    c_dl = ue->GetTargetNode ()->GetPhy ()->GetDlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue ->GetTargetNode(), ue);
+                    channelRealizationExists = true;
+                }
+            }
+            
+            if(channelRealizationExists) {
+                // use the same shadowing value for eNBs in the same site
+                if(idCell == servingCellId) {
+                    shadowing = target_c_dl->GetShadowing();
+                    c_dl->SetShadowing(shadowing);
+                }
+                else if (idCell == idCellPrec) {
+                    shadowing = oldShadowing;
+                    c_dl->SetShadowing(shadowing);
+                }
+                else {
+                    shadowing = c_dl->GetShadowing();
+                    oldShadowing = shadowing;
+                }
+                
+                pathLoss = c_dl->GetPathLoss();
+                
+                // penetration loss is the same from all BS, use value from serving eNB channel realization
+                penetrationLoss = target_c_dl->GetPenetrationLoss();
+                
+                for (int i=0; i<nbTxAntennas; i++) {
+                    beamFormingGain.push_back(c_dl->GetBeamformingGain(i));
+                }
+                
+                idCellPrec = idCell;
+            }
+            else {}
+            
+            double nodeInterference_db = powerTXForSubBandwidth - shadowing - penetrationLoss - pathLoss; // in dB
+            
+            double nodeInterference = 0;
+            
+            for (int i=0; i<nbTxAntennas; i++) {
+                nodeInterference += pow(10, (nodeInterference_db + beamFormingGain.at(i))/10);
+            }
+            
+            Interference += nodeInterference;
+            interference.insert(std::pair<GNodeB*, double>(node, Interference));
+            Interference = 0;
+            
+            
+            /*cout << "\t add interference from eNB " << node->GetIDNetworkNode ()
+             << " " << powerTXForSubBandwidth << " "  << shadowing << " " << penetrationLoss << " " << ComputePathLossForInterference (node, ue, m_isLosType)
+             << " " << nodeInterference_db << " " << nodeInterference
+             << " --> tot: " << interference
+             << endl;*/
+        }
+    }
+    
+    //cout << "Compute interference for UE " << ue->GetIDNetworkNode () << " ,target node " << ue->GetTargetNode ()->GetIDNetworkNode ()<< endl;
+    
+    for (auto henb : *NetworkManager::Init ()->GetHomeGNodeBContainer()) {
+        if (henb->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode () &&
+            henb->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw () ==
+            ue->GetTargetNode ()->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw ()) {
+            double powerTXForSubBandwidth = 10 * log10 (
+                                                        pow (10., (henb->GetPhy()->GetTxPower() - 30)/10)
+                                                        /
+                                                        henb->GetPhy()->GetBandwidthManager ()->GetDlSubChannels().size ());
+            
+            
+            //ATTENZIONE double nodeInterference_db = powerTXForSubBandwidth - 10 - ComputePathLossForInterference (henb, ue); // in dB
+            double nodeInterference_db = powerTXForSubBandwidth - ComputePathLossForInterference (henb, ue, m_isLosType); // in dB
+            double nodeInterference = pow(10, nodeInterference_db/10);
+            
+            Interference += nodeInterference;
+            
+            /*
+             cout << "\t add interference from eNB " << node->GetIDNetworkNode ()
+             << " " << powerTXForSubBandwidth << " "  << ComputePathLossForInterference (node, ue)
+             << " " << nodeInterference_db << " " << nodeInterference
+             << " --> tot: " << interference
+             << endl;
+             */
+        }
+    }
+    
+    return interference;
+}
+
+
+
+//TODO: CHECK GD remove unnecessary comments and unnecessary variables!
+map<UserEquipment*,double>
+Interference::ComputeUplinkInterference (UserEquipment *ue) {
+    //ENodeB *node;
+    int nbInterferer =0;
+    map<UserEquipment*,double> interference;
+    double Interference = 0;
+    int idCellPrec;
+    bool oldLosType;
+    double oldShadowing = 0;
+    int nbRxAntennas = ue->GetTargetNode()->GetPhy()->GetRxAntennas();
+    int servingCellId = ue->GetTargetNode ()->GetCell()->GetIdCell();
+    ChannelRealization* target_c_ul;
+    
+    target_c_ul = ue->GetPhy ()->GetUlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue, ue->GetTargetNode());
+    
+    for (auto node : *NetworkManager::Init ()->GetGNodeBContainer ()) {
+        if (node->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode ()) {
+            /*DEBUG_LOG_START_1(SIM_ENV_ULINT){
+             cout<<"Total number of user equipment connected to ENodeB: "<<node->GetIDNetworkNode ()<<" = "<< nbUE << endl;
+             }
+             DEBUG_LOG_END*/
+            for(auto record : *node->GetUserEquipmentRecords()) {
+                int userID = record->m_UE->GetIDNetworkNode();
+                int nbTxAntennas = record->GetUE()->GetPhy()->GetTxAntennas();
+                //cout << "selecting interference from cell " << node->GetIDNetworkNode() << endl;
+                // XXX Assume the internal cluster of 19 cells is the MBSFN area, and the others create interference
+                
+                double powerTXForSubBandwidth = 10 * log10 (
+                                                            pow (10., (record->GetUE()->GetPhy()->GetTxPower() - 30)/10)
+                                                            /
+                                                            record->GetUE()->GetPhy()->GetBandwidthManager()->GetUlSubChannels().size ()
+                                                            /
+                                                            nbRxAntennas);
+                
+                double pathLoss = 0;
+                double shadowing = 0;
+                double penetrationLoss = 0;
+                vector<double> beamFormingGain;
+                
+                int idCell = node->GetCell()->GetIdCell();
+                
+                ChannelRealization* c_ul= nullptr;
+                c_ul = ue->GetTargetNode()->GetPhy()->GetUlChannel()->GetPropagationLossModel ()->GetChannelRealization(record->GetUE(),ue->GetTargetNode());
+                
+                bool channelRealizationExists;
+                if (c_ul != nullptr)
+                    channelRealizationExists = true;
+                else {
+                    channelRealizationExists = false;
+                    c_ul = record->GetUE()->GetPhy ()->GetUlChannel ()->GetPropagationLossModel ()->GetChannelRealization(ue , ue->GetTargetNode());
+                }
+                
+                
+                if(channelRealizationExists) {
+                    // use the same shadowing value for eNBs in the same site
+                    if(idCell == servingCellId) {
+                        shadowing = target_c_ul->GetShadowing();
+                        c_ul->SetShadowing(shadowing);
+                    }
+                    else if (idCell == idCellPrec) {
+                        shadowing = oldShadowing;
+                        c_ul->SetShadowing(shadowing);
+                    }
+                    else {
+                        shadowing = c_ul->GetShadowing();
+                        oldShadowing = shadowing;
+                    }
+                    
+                    pathLoss = c_ul->GetPathLoss();
+                    
+                    // penetration loss is the same from all BS, use value from serving eNB channel realization
+                    penetrationLoss = target_c_ul->GetPenetrationLoss();
+                    
+                    for (int i=0; i<nbRxAntennas; i++)
+                        beamFormingGain.push_back(c_ul->GetBeamformingGain(i));
+                    
+                    idCellPrec = idCell;
+                }
+                
+                double nodeInterference_db = powerTXForSubBandwidth - shadowing - penetrationLoss - pathLoss; // in dB
+                
+                double nodeInterference = 0;
+                
+                for (int i=0; i<nbRxAntennas; i++)
+                    nodeInterference += pow(10, (nodeInterference_db + beamFormingGain.at(i))/10);
+                
+                Interference += nodeInterference;
+                
+                nbInterferer++;
+                
+                interference.insert(std::pair<UserEquipment*,double>(record->m_UE,Interference));
+                Interference = 0;
+                beamFormingGain.clear();
+            }
+        }
+        
+        
+        for (auto henb : *NetworkManager::Init ()->GetHomeGNodeBContainer()) {
+            if (henb->GetIDNetworkNode () != ue->GetTargetNode ()->GetIDNetworkNode () &&
+                henb->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw () ==
+                ue->GetTargetNode ()->GetPhy ()->GetBandwidthManager ()->GetDlOffsetBw ()) {
+                double powerTXForSubBandwidth = 10 * log10 (
+                                                            pow (10., (henb->GetPhy()->GetTxPower() - 30)/10)
+                                                            /
+                                                            henb->GetPhy()->GetBandwidthManager ()->GetDlSubChannels().size ());
+                
+                
+                //ATTENZIONE double nodeInterference_db = powerTXForSubBandwidth - 10 - ComputePathLossForInterference (henb, ue); // in dB
+                double nodeInterference_db = powerTXForSubBandwidth - ComputePathLossForInterference (henb, ue, m_isLosType); // in dB
+                double nodeInterference = pow(10, nodeInterference_db/10);
+                
+                //interference += nodeInterference;
+                
+                /*
+                 cout << "\t add interference from eNB " << node->GetIDNetworkNode ()
+                 << " " << powerTXForSubBandwidth << " "  << ComputePathLossForInterference (node, ue)
+                 << " " << nodeInterference_db << " " << nodeInterference
+                 << " --> tot: " << interference
+                 << endl;
+                 */
+            }
+        }
+    }
+    return interference;
 }

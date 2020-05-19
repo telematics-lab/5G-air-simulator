@@ -36,57 +36,78 @@ class CqiManager;
 class UserEquipment : public NetworkNode
 {
 public:
-  UserEquipment () = default;
-  UserEquipment (int idElement,
-                 double posx, double posy,
-                 Cell *cell,
-                 GNodeB* target,
-                 bool handover, Mobility::MobilityModel model);
-  UserEquipment (int idElement,
-                 double posx, double posy, int speed, double speedDirection,
-                 Cell *cell,
-                 GNodeB* target,
-                 bool handover, Mobility::MobilityModel model);
-
-  virtual ~UserEquipment();
-
-  void SetTargetNode (GNodeB *n);
-  GNodeB* GetTargetNode (void);
-
-  void SetTargetNodeRecord (GNodeB::UserEquipmentRecord *r);
-  GNodeB::UserEquipmentRecord* GetTargetNodeRecord (void);
-  void UpdateUserPosition (double time);
-  UeMacEntity* GetMacEntity(void) const;
-
-  void SetCqiManager (CqiManager *cm);
-  CqiManager* GetCqiManager (void);
-
-  void SetTimePositionUpdate (double time);
-  double GetTimePositionUpdate (void);
-
-  void
-  SetIndoorFlag ( bool flag );
-  virtual bool
-  IsIndoor (void);
-
-  void SetLastActivity();
-
-  void SetActivityTimeout(double timeout);
-  double GetActivityTimeout();
-  void SetRandomAccessType(UeRandomAccess::RandomAccessType type);
-  //Debug
-  void Print (void);
-
+    UserEquipment () = default;
+    UserEquipment (int idElement,
+                   double posx, double posy,
+                   Cell *cell,
+                   GNodeB* target,
+                   bool handover, Mobility::MobilityModel model);
+    UserEquipment (int idElement,
+                   double posx, double posy, int speed, double speedDirection,
+                   Cell *cell,
+                   GNodeB* target,
+                   bool handover, Mobility::MobilityModel model);
+    
+    virtual ~UserEquipment();
+    
+    void SetTargetNode (GNodeB *n);
+    GNodeB* GetTargetNode (void);
+    
+    void SetTargetNodeRecord (GNodeB::UserEquipmentRecord *r);
+    GNodeB::UserEquipmentRecord* GetTargetNodeRecord (void);
+    void UpdateUserPosition (double time);
+    UeMacEntity* GetMacEntity(void) const;
+    
+    void SetCqiManager (CqiManager *cm);
+    CqiManager* GetCqiManager (void);
+    
+    void SetTimePositionUpdate (double time);
+    double GetTimePositionUpdate (void);
+    
+    void
+    SetIndoorFlag ( bool flag );
+    virtual bool
+    IsIndoor (void);
+    
+    void SetLastActivity();
+    
+    void SetActivityTimeout(double timeout);
+    double GetActivityTimeout();
+    void SetRandomAccessType(UeRandomAccess::RandomAccessType type);
+    
+    double GetDistanceFromServingCell(void);
+    void SetDistanceFromServingCell(double);
+    
+    // for tiwn model
+    void
+    SetTwinFlag (bool flag);
+    virtual bool
+    IsTwin(void);
+    void
+    SetTwinTransmittingFlag(bool flag);
+    virtual bool
+    IsTwinTransmitting(void);
+    bool hasTwin(void);
+    void SethasTwin(bool flag);
+    
+    //Debug
+    void Print (void);
+    
 private:
-  GNodeB* m_targetNode;
-  GNodeB::UserEquipmentRecord* m_targetNodeRecord;
-  CqiManager *m_cqiManager;
-
-  bool m_isIndoor;
-
-  double m_timePositionUpdate;
-  double m_activityTimeout;
-  shared_ptr<Event> m_activityTimeoutEvent;
+    GNodeB* m_targetNode;
+    GNodeB::UserEquipmentRecord* m_targetNodeRecord;
+    CqiManager *m_cqiManager;
+    
+    bool m_isIndoor;
+    
+    double m_timePositionUpdate;
+    double m_activityTimeout;
+    shared_ptr<Event> m_activityTimeoutEvent;
+    
+    double m_distanceFromServingCell;
+    bool m_isTwin;  //for Twin HO
+    bool m_isTwinTransmitting; //for Twin HO
+    bool m_hasTwin;
 };
 
 #endif /* USEREQUIPMENT_H_ */

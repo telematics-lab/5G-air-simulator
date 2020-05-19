@@ -69,13 +69,13 @@ This operation can be undone by deleting the same environment variable:
  5G-air-simulator works also with multiple environment variables at the same time (up to 4). 
  For example:
  
-    DEBUG_LOG_START_2(LTE_SIM_FOO_VAR, LTE_SIM_FOO_VAR_2)
+    DEBUG_LOG_START_2(SIM_ENV_FOO_VAR, SIM_ENV_FOO_VAR_2)
     ...
     //debug code
     ...
     DEBUG_LOG_END
     
-tells the compiler to run the code only if either `LTE_SIM_FOO_VAR` or `LTE_SIM_FOO_VAR_2` have been defined.
+tells the compiler to run the code only if either `SIM_ENV_FOO_VAR` or `SIM_ENV_FOO_VAR_2` have been defined.
 
 Several instances are already present in the source files.
 

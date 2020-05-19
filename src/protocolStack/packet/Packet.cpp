@@ -35,6 +35,8 @@ Packet::Packet()
   m_id = 0;
   m_timeStamp = 0;
   m_size = 0;
+  //TODO: CHECK GD is it fine? Remember to always initialize attributes in the constructor :-)
+  m_rtts = 0;
 }
 
 Packet::~Packet()
@@ -275,6 +277,7 @@ Packet::Copy (void)
     }
 
   p->m_size = m_size;
+  p->m_rtts = m_rtts;
 
   return p;
 }
@@ -306,4 +309,14 @@ Packet::Print ()
     cout << " IsTheLatestFragment FALSE ";
 
   cout << "\n **********"  << endl;
+}
+
+void
+Packet::SetRtts(double rtts) {
+    m_rtts = rtts; //for priority scheduling
+}
+
+double
+Packet::GetRtts() {
+    return m_rtts; //for priority scheduling
 }

@@ -36,32 +36,50 @@ class NetworkNode;
 class FlowsManager
 {
 public:
-
+    
 private:
-
-  FlowsManager() = default;
-  static FlowsManager *ptr;
-
+    
+    FlowsManager() = default;
+    static FlowsManager *ptr;
+    
 public:
-  virtual ~FlowsManager() = default;
-
-  static FlowsManager*
-  Init (void)
-  {
-    if (ptr==nullptr)
-      {
-        ptr = new FlowsManager;
-      }
-    return ptr;
-  }
-
-  Application*  CreateApplication (int applicationID,
-                                   NetworkNode* src, NetworkNode* dst,
-                                   int srcPort, int destPort,
-                                   TransportProtocol::TransportProtocolType protocol,
-                                   Application::ApplicationType type,
-                                   QoSParameters* qos,
-                                   double startTime, double duration);
+    virtual ~FlowsManager() = default;
+    
+    static FlowsManager*
+    Init (void)
+    {
+        if (ptr==nullptr)
+        {
+            ptr = new FlowsManager;
+        }
+        return ptr;
+    }
+    
+    Application*  CreateApplication (int applicationID,
+                                     NetworkNode* src, NetworkNode* dst,
+                                     int srcPort, int destPort,
+                                     TransportProtocol::TransportProtocolType protocol,
+                                     Application::ApplicationType type,
+                                     QoSParameters* qos,
+                                     double startTime, double duration);
+    //TODO: CHECK GD is it fine?
+    
+    Application*
+    CreateApplication (int applicationID,
+                       NetworkNode* src, NetworkNode* dst,
+                       int srcPort, int destPort,
+                       TransportProtocol::TransportProtocolType protocol,
+                       Application::ApplicationType type,
+                       QoSParameters* qos,double time);
+    
+    Application*
+    CreateApplication (int applicationID,
+                       NetworkNode* src, NetworkNode* dst,
+                       int srcPort, int destPort,
+                       TransportProtocol::TransportProtocolType protocol,
+                       Application::ApplicationType type,
+                       QoSParameters* qos, bool state, double stateduration,
+                       double endstate, double time);
 };
 
 #endif /* FLOWSMANAGER_H_ */

@@ -238,8 +238,9 @@ DEBUG_LOG_END
                   pCopy->GetIPHeader ()->SetDestinationID (GetIDNetworkNode());
                   RadioBearerInstance* bearer =
                     GetProtocolStack ()->GetRrcEntity ()->GetRadioBearer (rlcEntityIndex);
-
-                  bearer->GetRlcEntity ()->ReceptionProcedure (pCopy);
+                    
+                    if(bearer!=nullptr)
+                        bearer->GetRlcEntity ()->ReceptionProcedure (pCopy);
                 }
             }
         }
