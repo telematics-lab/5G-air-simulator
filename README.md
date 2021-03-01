@@ -46,7 +46,7 @@ In order to exploit MIMO and mMIMO capabilities of 5G-air-simulator you need to 
 - Extract it into src/channel/propagation-model/FastFadingRealization/
 - Open the file src/load-parameters.h
 - Comment the directive `#define _channel_simple_` 
-- Uncomment `//#define _channel_simple_`
+- Uncomment `//#define _channel_advanced_`
 - Re-build 5G-air-simulator
 
 ### 5. How-to Debugging and Logging
