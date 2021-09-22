@@ -99,7 +99,6 @@ UserEquipment::UserEquipment (int idElement,
                               this,
                               Simulator::Init ()->Now());
 
-  delete position;
 
   UePhy *phy = new UePhy ();
   phy->SetDevice(this);
