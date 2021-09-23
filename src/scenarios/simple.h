@@ -64,10 +64,10 @@ static void Simple ()
 
   // CREATE CELL
   int idCell = 0;
-  int radius = 1; //km
-  int minDistance = 0.0035; //km
-  int posX = 0;
-  int posY = 0;
+  double radius = 1; //km
+  double minDistance = 0.0035; //km
+  double posX = 0;
+  double posY = 0;
   Cell* cell = networkManager->CreateCell (idCell, radius, minDistance, posX, posY);
 
 
