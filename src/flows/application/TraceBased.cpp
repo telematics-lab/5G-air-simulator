@@ -93,7 +93,7 @@ TraceBased::LoadTrace (string traceFile)
   while (ifTraceFile.good ())
     {
       ifTraceFile >> index >> frameType >> time >> size;
-      if (frameType == 'B' || frameType == 'PB')
+      if (frameType == 'B' || frameType == 'P' )
         {
           entry.TimeToSend = 0;
         }
