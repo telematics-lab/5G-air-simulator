@@ -57,7 +57,7 @@ nbUplinkPacketScheduler::nbUplinkPacketScheduler(GnbMacEntity* mac)
   u.m_listOfAllocatedRUs.clear();
   u.m_selectedMCS = -1;
 
-  for (int i=0; i< mac->GetDevice ()->GetPhy ()->GetBandwidthManager ()->GetUlSubChannels ().size (); i++)
+  for (unsigned long int i=0; i< mac->GetDevice ()->GetPhy ()->GetBandwidthManager ()->GetUlSubChannels ().size (); i++)
     {
       m_RUmap[0].push_back(-1);
       m_RUmap[1].push_back(-1);

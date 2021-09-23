@@ -101,7 +101,7 @@ private:
   float m_maxCCCHUsage;
   AllocationMap m_RBsReservedForCCCH;
   queue <rarElement> m_rarQueue;
-  int m_nbRARs;
+  unsigned long int m_nbRARs;
 
   shared_ptr<Event> m_RachReservation;
   shared_ptr<Event> m_RarScheduling;

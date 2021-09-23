@@ -48,7 +48,7 @@ nbRoundRobinUplinkPacketScheduler::nbRoundRobinUplinkPacketScheduler(GnbMacEntit
   u.m_listOfAllocatedRUs.clear();
   u.m_selectedMCS = -1;
 
-  for (int i=0; i< mac->GetDevice ()->GetPhy ()->GetBandwidthManager ()->GetUlSubChannels ().size (); i++)
+  for (unsigned long int i=0; i< mac->GetDevice ()->GetPhy ()->GetBandwidthManager ()->GetUlSubChannels ().size (); i++)
     {
       m_RUmap[0].push_back(-1);
       m_RUmap[1].push_back(-1);
@@ -222,7 +222,7 @@ DEBUG_LOG_START_1(SIM_ENV_SCHEDULER_DEBUG_RR_MAP)
       printMap();
 DEBUG_LOG_END
 
-      for (int i=0; i<m_RUmap[1].size(); i++)
+      for (unsigned long int i=0; i<m_RUmap[1].size(); i++)
         {
           if (m_RUmap[1][i] > 0)
             {

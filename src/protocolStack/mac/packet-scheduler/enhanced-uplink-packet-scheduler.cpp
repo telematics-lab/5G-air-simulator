@@ -231,7 +231,7 @@ DEBUG_LOG_END
             {
               scheduledUser->m_transmittedData = amc->GetTBSizeFromMCS (scheduledUser->m_selectedMCS, scheduledUser->m_listOfAllocatedRBs.size()) / 8;
 DEBUG_LOG_START_1(SIM_ENV_SCHEDULER_DEBUG)
-              printf("Scheduled User = %d mcs = %d Required RB's = %d Allocated RB's= %d\n",
+              printf("Scheduled User = %d mcs = %d Required RB's = %d Allocated RB's= %ul\n",
                      scheduledUser->m_userToSchedule->GetIDNetworkNode(),
                      scheduledUser->m_selectedMCS,
                      requiredPRBs[selectedUser], scheduledUser->m_listOfAllocatedRBs.size() );
